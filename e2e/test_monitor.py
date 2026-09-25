@@ -1,6 +1,6 @@
 """The Deadline Monitor workflow driving the obligation lifecycle: 24h / 6h / overdue / escalated, without spam.
 
-Time is the demo clock (a virtual clock the API and every rule share), so a two-day ladder runs in seconds. The monitor is
+Time is the test clock (a virtual clock the API and every rule share), so a two-day ladder runs in seconds. The monitor is
 triggered through its real n8n webhook; delivery goes through the real Notification Dispatcher into Mailpit.
 """
 
