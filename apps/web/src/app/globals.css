@@ -1,0 +1,145 @@
+@import "tailwindcss";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+
+/*
+ * Design tokens - the only place colours, type and radii are defined.
+ * Warm neutrals (ivory, stone, charcoal, ink) with four muted semantic colours; each semantic text colour is tested
+ * for WCAG AA contrast against its own background (tests/contrast.test.ts). No gradients, glow or glass.
+ */
+@theme {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --color-bg: #f6f3ec;
+  --color-surface: #fffefb;
+  --color-surface-2: #faf7f1;
+  --color-line: #e5dfd3;
+  --color-line-strong: #d3cab8;
+  --color-ink: #1c1a16;
+  --color-text: #2f2c27;
+  --color-text-2: #5e584e;
+  --color-text-3: #6f6859;
+
+  --color-ok: #2f6646;
+  --color-ok-bg: #e8f0ea;
+  --color-ok-line: #c3d9ca;
+  --color-warn: #7f5509;
+  --color-warn-bg: #f6ecd6;
+  --color-warn-line: #e2cd9d;
+  --color-danger: #9a3626;
+  --color-danger-bg: #f5e2dc;
+  --color-danger-line: #e4bcaf;
+  --color-info: #43566a;
+  --color-info-bg: #e8ecf0;
+  --color-info-line: #c8d2db;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --shadow-card: 0 1px 0 rgb(28 26 22 / 0.035);
+  --shadow-pop: 0 10px 28px -10px rgb(28 26 22 / 0.22), 0 2px 6px rgb(28 26 22 / 0.06);
+
+  --ease-out-soft: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@layer base {
+  html {
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    min-height: 100dvh;
+  }
+  h1,
+  h2,
+  h3 {
+    color: var(--color-ink);
+    letter-spacing: -0.011em;
+    font-weight: 600;
+  }
+  a {
+    color: inherit;
+  }
+  ::selection {
+    background: #e9dfc6;
+    color: var(--color-ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  button,
+  [role="button"],
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-text-3);
+    opacity: 0.85;
+  }
+  /* numbers line up wherever they are compared */
+  .tabular,
+  time,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+}
+
+@utility eyebrow {
+  font-size: 11.5px;
+  line-height: 16px;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-text-3);
+}
+
+@utility text-balance-soft {
+  text-wrap: balance;
+}
+
+/* One place to honour prefers-reduced-motion for CSS transitions; Framer Motion components read the same preference. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* skeleton shimmer is a soft breathing fade, not a moving gradient */
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@utility animate-breathe {
+  animation: breathe 1.6s var(--ease-out-soft) infinite;
+}
+
+/* scrollbars stay out of the way */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}
