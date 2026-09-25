@@ -85,7 +85,6 @@ function fromGmail(item, ownerEmail, nowIso) {
       received_at: isoDate(item.internalDate, item.date) || nowIso,
       direction: sender.email === owner ? 'OUTBOUND' : 'INBOUND',
       recipients: addressList(item.to, item.cc),
-      is_synthetic: false,
     },
     correlation_id: String(item.id),
     trigger: 'GMAIL',
@@ -102,7 +101,7 @@ function fromWebhook(body, nowIso) {
   const text = message.body == null ? '' : String(message.body);
   const subject = message.subject == null ? null : String(message.subject).slice(0, 500);
   if (!text.trim() && !(subject && subject.trim())) throw new Error('Invalid ingest payload: the message has neither a body nor a subject');
-  const sourceType = String(message.source_type || 'DEMO').toUpperCase();
+  const sourceType = String(message.source_type || 'WEBHOOK').toUpperCase();
   const sender = message.sender_email ? String(message.sender_email).trim().toLowerCase() : null;
   const owner = body.user_email.trim().toLowerCase();
   return {
@@ -119,7 +118,6 @@ function fromWebhook(body, nowIso) {
       received_at: isoDate(null, message.received_at) || nowIso,
       direction: message.direction === 'OUTBOUND' || (sender && sender === owner) ? 'OUTBOUND' : 'INBOUND',
       recipients: Array.isArray(message.recipients) ? message.recipients.filter(isEmail).map((r) => r.trim().toLowerCase()).slice(0, 20) : [],
-      is_synthetic: message.is_synthetic === true || sourceType === 'DEMO',
     },
     correlation_id: message.external_id.trim(),
     trigger: 'WEBHOOK',

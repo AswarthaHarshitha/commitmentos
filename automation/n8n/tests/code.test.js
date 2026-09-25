@@ -15,7 +15,7 @@ const E = loadCode('errors.js');
 
 const NOW = '2026-09-24T12:00:00.000Z';
 const webhook = (message, extra = {}) => ({ body: { user_email: 'Alice@Example.com', message, ...extra }, headers: {} });
-const msg = (over = {}) => ({ source_type: 'demo', external_id: 'm-1', sender_email: 'HR@Example.org', subject: 'Paperwork', body: 'Please sign by Friday.', received_at: '2026-09-23T15:00:00Z', ...over });
+const msg = (over = {}) => ({ source_type: 'webhook', external_id: 'm-1', sender_email: 'HR@Example.org', subject: 'Paperwork', body: 'Please sign by Friday.', received_at: '2026-09-23T15:00:00Z', ...over });
 
 // ================================================================================== normalize: the ingest webhook
 test('a webhook message is normalised into the API envelope', () => {
@@ -24,9 +24,20 @@ test('a webhook message is normalised into the API envelope', () => {
   assert.equal(out.trigger, 'WEBHOOK');
   assert.equal(out.correlation_id, 'm-1');
   assert.deepEqual(out.message, {
-    source_type: 'DEMO', external_id: 'm-1', thread_id: null, rfc_message_id: null, sender_email: 'hr@example.org', sender_name: null,
-    subject: 'Paperwork', body: 'Please sign by Friday.', received_at: '2026-09-23T15:00:00.000Z', direction: 'INBOUND', recipients: [], is_synthetic: true,
+    source_type: 'WEBHOOK', external_id: 'm-1', thread_id: null, rfc_message_id: null, sender_email: 'hr@example.org', sender_name: null,
+    subject: 'Paperwork', body: 'Please sign by Friday.', received_at: '2026-09-23T15:00:00.000Z', direction: 'INBOUND', recipients: [],
   });
+});
+
+test('a webhook message that names no source is a plain webhook message', () => {
+  const { source_type, ...withoutSource } = msg();
+  assert.equal(source_type, 'webhook');
+  assert.equal(N.normalizeIncoming(webhook(withoutSource), { nowIso: NOW }).message.source_type, 'WEBHOOK');
+});
+
+test('the envelope carries no marker other than what the message really is', () => {
+  const out = N.normalizeIncoming(webhook(msg({ is_synthetic: true })), { nowIso: NOW });
+  assert.equal('is_synthetic' in out.message, false);
 });
 
 test('a missing received_at falls back to now, and a garbage one does too', () => {
@@ -141,7 +152,7 @@ test('a Gmail message is normalised, with the mailbox owner supplied by the work
   assert.deepEqual(out.message, {
     source_type: 'GMAIL', external_id: '18c7', thread_id: 't-9', rfc_message_id: '<abc@mail.example.org>', sender_email: 'dana@example.org', sender_name: 'Dana Whitfield',
     subject: 'Signed offer letter', body: 'Please send it back by Friday 5pm.', received_at: '2026-09-23T15:00:00.000Z', direction: 'INBOUND',
-    recipients: ['alice@example.com', 'lead@example.com'], is_synthetic: false,
+    recipients: ['alice@example.com', 'lead@example.com'],
   });
 });
 

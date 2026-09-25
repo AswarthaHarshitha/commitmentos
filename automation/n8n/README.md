@@ -6,7 +6,7 @@ n8n is the orchestrator: it decides **when** something runs, **where** data goes
 
 ```
  Gmail ─┐                       ┌── /api/internal/messages/check   (seen already? asked BEFORE paying for an LLM call)
- demo  ─┴─> Incoming Detection ─┼── /api/internal/extract          (LLM + validation + deterministic deadline)
+ paste ─┴─> Incoming Detection ─┼── /api/internal/extract          (LLM + validation + deterministic deadline)
  webhook                        └── /api/webhooks/n8n              message.extracted  -> obligation / review / candidate / ignore
  every 5 min ──> Deadline Monitor ──> /api/internal/monitor/tick   which reminder is due? (24h, 6h, overdue, escalated)
  every 15 min ─> Calendar Sync ─────> /api/internal/calendar/scan  proposals only
@@ -75,14 +75,14 @@ node --test automation/n8n/tests/*.test.js
 * **Failure text is scrubbed** (`code/_common.js`): tokens are redacted, and an HTTP error's echoed request body - which can
   quote an email - is reduced to the status and the API's own error code.
 * **`--activeState=fromJson` only works in queue mode**, so `import.sh` publishes each workflow explicitly.
-* **n8n stores execution data (message text) for inspection and retry.** Defaults suit the synthetic demo (72 h); for a real
+* **n8n stores execution data (message text) for inspection and retry.** Failed runs keep theirs for 72 h; successful runs keep nothing by default (`N8N_SAVE_SUCCESS_EXECUTIONS=none`); for a real
   mailbox set `N8N_SAVE_SUCCESS_EXECUTIONS=none` (`.env.example`).
 
 ## What is verified, and what is not
 
 Verified against the running stack by `e2e/` (31 tests: real n8n executions, real SMTP into Mailpit, real API and database):
 ingestion end to end; duplicate detection before the LLM call; the same words resolving to different instants in different
-timezones; the full 24h / 6h / overdue / escalated ladder driven by the demo clock, each rung once, nothing after completion;
+timezones; the full 24h / 6h / overdue / escalated ladder driven by the test clock, each rung once, nothing after completion;
 retry of a flaky LLM; a permanently unavailable LLM (visible failure, later retry of the same message); malformed and
 hallucinated model output; a spent quota; approval, rejection, calendar invite (a real `.ics` attachment), completion
 suggested from a reply; a duplicate/racing trigger sending exactly one email; an n8n outage between approval and execution;
