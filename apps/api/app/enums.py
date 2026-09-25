@@ -1,0 +1,204 @@
+"""Domain enums. Stored as VARCHAR + CHECK constraints (not native PG enums) so adding a
+value is a plain migration rather than an ``ALTER TYPE`` dance."""
+
+from __future__ import annotations
+
+from enum import StrEnum
+
+
+class ObligationType(StrEnum):
+    DEADLINE = "DEADLINE"
+    PAYMENT = "PAYMENT"
+    APPOINTMENT = "APPOINTMENT"
+    INTERVIEW = "INTERVIEW"
+    DOCUMENT_REQUEST = "DOCUMENT_REQUEST"
+    FOLLOW_UP = "FOLLOW_UP"
+    RENEWAL = "RENEWAL"
+    RETURN = "RETURN"
+    PERSONAL_COMMITMENT = "PERSONAL_COMMITMENT"
+    TASK = "TASK"
+    OTHER = "OTHER"
+
+
+class ObligationStatus(StrEnum):
+    DETECTED = "DETECTED"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+    OPEN = "OPEN"
+    ACTION_REQUIRED = "ACTION_REQUIRED"
+    SCHEDULED = "SCHEDULED"
+    COMPLETED = "COMPLETED"
+    DISMISSED = "DISMISSED"
+    OVERDUE = "OVERDUE"
+    ESCALATED = "ESCALATED"
+
+
+class Priority(StrEnum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    URGENT = "URGENT"
+
+
+class SourceType(StrEnum):
+    GMAIL = "GMAIL"
+    GOOGLE_CALENDAR = "GOOGLE_CALENDAR"
+    WEBHOOK = "WEBHOOK"
+    MANUAL = "MANUAL"
+    DEMO = "DEMO"  # clearly-labelled synthetic messages
+
+
+class SourceDisposition(StrEnum):
+    """What the pipeline decided to do with an incoming message."""
+
+    OBLIGATION_CREATED = "OBLIGATION_CREATED"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+    CANDIDATE = "CANDIDATE"
+    DUPLICATE = "DUPLICATE"
+    NOT_OBLIGATION = "NOT_OBLIGATION"
+    EXTRACTION_FAILED = "EXTRACTION_FAILED"
+    MANUAL = "MANUAL"
+
+
+class DuePrecision(StrEnum):
+    DATE = "DATE"  # only a calendar day is known; due at end of that local day
+    DATETIME = "DATETIME"
+
+
+class Recurrence(StrEnum):
+    DAILY = "DAILY"
+    WEEKLY = "WEEKLY"
+    MONTHLY = "MONTHLY"
+    YEARLY = "YEARLY"
+
+
+class CandidateStatus(StrEnum):
+    PENDING = "PENDING"
+    PROMOTED = "PROMOTED"
+    DISCARDED = "DISCARDED"
+
+
+class NotificationKind(StrEnum):
+    DETECTED = "DETECTED"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+    REMINDER = "REMINDER"
+    HIGH_PRIORITY_REMINDER = "HIGH_PRIORITY_REMINDER"
+    OVERDUE = "OVERDUE"
+    ESCALATION = "ESCALATION"
+    APPROVAL_REQUESTED = "APPROVAL_REQUESTED"
+    ACTION_RESULT = "ACTION_RESULT"
+    CALENDAR_SUGGESTION = "CALENDAR_SUGGESTION"
+    FOLLOW_UP_SUGGESTION = "FOLLOW_UP_SUGGESTION"
+
+
+class NotificationChannel(StrEnum):
+    IN_APP = "IN_APP"
+    EMAIL = "EMAIL"
+    TELEGRAM = "TELEGRAM"
+
+
+class NotificationStatus(StrEnum):
+    PENDING = "PENDING"
+    SENDING = "SENDING"
+    SENT = "SENT"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+    SKIPPED = "SKIPPED"
+
+
+class ActorType(StrEnum):
+    USER = "USER"
+    SYSTEM = "SYSTEM"
+    N8N = "N8N"
+    AI = "AI"
+
+
+class AuditEventType(StrEnum):
+    MESSAGE_RECEIVED = "MESSAGE_RECEIVED"
+    COMMITMENT_DETECTED = "COMMITMENT_DETECTED"
+    AI_CLASSIFIED = "AI_CLASSIFIED"
+    EXTRACTION_FAILED = "EXTRACTION_FAILED"
+    OBLIGATION_CREATED = "OBLIGATION_CREATED"
+    CANDIDATE_STORED = "CANDIDATE_STORED"
+    CANDIDATE_PROMOTED = "CANDIDATE_PROMOTED"
+    CANDIDATE_DISCARDED = "CANDIDATE_DISCARDED"
+    DUPLICATE_MERGED = "DUPLICATE_MERGED"
+    NOT_AN_OBLIGATION = "NOT_AN_OBLIGATION"
+    OBLIGATION_UPDATED = "OBLIGATION_UPDATED"
+    STATUS_CHANGED = "STATUS_CHANGED"
+    ACCEPTED = "ACCEPTED"
+    SNOOZED = "SNOOZED"
+    COMPLETED = "COMPLETED"
+    DISMISSED = "DISMISSED"
+    REOPENED = "REOPENED"
+    OVERDUE_MARKED = "OVERDUE_MARKED"
+    ESCALATED = "ESCALATED"
+    RECURRENCE_SPAWNED = "RECURRENCE_SPAWNED"
+    NOTIFICATION_QUEUED = "NOTIFICATION_QUEUED"
+    NOTIFICATION_SENT = "NOTIFICATION_SENT"
+    NOTIFICATION_FAILED = "NOTIFICATION_FAILED"
+    NOTIFICATION_SUPPRESSED = "NOTIFICATION_SUPPRESSED"
+    REMINDERS_STOPPED = "REMINDERS_STOPPED"
+    APPROVAL_REQUESTED = "APPROVAL_REQUESTED"
+    APPROVAL_APPROVED = "APPROVAL_APPROVED"
+    APPROVAL_REJECTED = "APPROVAL_REJECTED"
+    APPROVAL_EXPIRED = "APPROVAL_EXPIRED"
+    ACTION_EXECUTED = "ACTION_EXECUTED"
+    ACTION_FAILED = "ACTION_FAILED"
+    CALENDAR_CHECKED = "CALENDAR_CHECKED"
+    CALENDAR_EVENT_CREATED = "CALENDAR_EVENT_CREATED"
+    FOLLOW_UP_DRAFTED = "FOLLOW_UP_DRAFTED"
+    AUTOMATION_RUN = "AUTOMATION_RUN"
+    SECURITY = "SECURITY"
+    DEMO = "DEMO"
+
+
+class RunStatus(StrEnum):
+    RUNNING = "RUNNING"
+    WAITING = "WAITING"  # paused for a human decision (e.g. follow-up draft awaiting approval)
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    SKIPPED = "SKIPPED"  # e.g. duplicate event
+    PARTIAL = "PARTIAL"
+
+
+class ApprovalAction(StrEnum):
+    SEND_FOLLOW_UP = "SEND_FOLLOW_UP"
+    CREATE_CALENDAR_EVENT = "CREATE_CALENDAR_EVENT"
+    DISMISS_OBLIGATION = "DISMISS_OBLIGATION"
+    COMPLETE_OBLIGATION = "COMPLETE_OBLIGATION"
+
+
+class ApprovalStatus(StrEnum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    EXECUTING = "EXECUTING"
+    EXECUTED = "EXECUTED"
+    FAILED = "FAILED"
+    REJECTED = "REJECTED"
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"
+
+
+class CalendarProvider(StrEnum):
+    GOOGLE = "GOOGLE"
+    LOCAL = "LOCAL"
+
+
+class CalendarEventStatus(StrEnum):
+    CONFIRMED = "CONFIRMED"
+    CANCELLED = "CANCELLED"
+
+
+# Statuses in which the system actively tracks time and may notify.
+ACTIVE_STATUSES = frozenset(
+    {
+        ObligationStatus.OPEN,
+        ObligationStatus.ACTION_REQUIRED,
+        ObligationStatus.SCHEDULED,
+        ObligationStatus.OVERDUE,
+        ObligationStatus.ESCALATED,
+    }
+)
+TERMINAL_STATUSES = frozenset({ObligationStatus.COMPLETED, ObligationStatus.DISMISSED})
+# Statuses a human still has to look at before the system treats them as real.
+PENDING_REVIEW_STATUSES = frozenset({ObligationStatus.DETECTED, ObligationStatus.NEEDS_REVIEW})
