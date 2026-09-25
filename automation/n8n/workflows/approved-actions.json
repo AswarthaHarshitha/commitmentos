@@ -1,0 +1,866 @@
+{
+  "id": "cosWfActions000001",
+  "name": "Approved Actions",
+  "active": true,
+  "nodes": [
+    {
+      "id": "dd92b8f1-04a5-bfaa-1261-392197e4448a",
+      "position": [
+        240,
+        200
+      ],
+      "name": "Approved by the user (webhook)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "commitmentos-action",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cosWebhookAuth0002",
+          "name": "CommitmentOS webhooks (API -> n8n secret)"
+        }
+      },
+      "webhookId": "66105cfa-6861-71fc-12c7-25469fcb5287"
+    },
+    {
+      "id": "183c57e7-8934-df44-e50e-58f705980d10",
+      "position": [
+        240,
+        540
+      ],
+      "name": "Every 2 minutes (catch-up)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "f8b8da18-e301-4fb2-7e21-d2d1599cb21c",
+      "position": [
+        520,
+        370
+      ],
+      "name": "Mark start",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const first = $input.first()?.json ?? {};\nconst trigger = 'headers' in first && 'body' in first ? 'WEBHOOK' : 'timestamp' in first ? 'SCHEDULE' : 'SUBWORKFLOW';\nreturn $input.all().map((i) => ({ json: { ...i.json, _t0: Date.now(), _trigger: trigger } }));"
+      },
+      "notes": "Remembers when this run began and what started it (for the run duration and trigger).",
+      "notesInFlow": true
+    },
+    {
+      "id": "e34eba27-2648-f1da-a8f3-ec4e1187f72a",
+      "position": [
+        800,
+        370
+      ],
+      "name": "Named in the webhook?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "acb89575-3963-178a-1a97-41680d1d2606",
+              "leftValue": "={{ !!($json.body && $json.body.approval_id) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "14d27323-09b8-5fb2-46a0-e44b8438da72",
+      "position": [
+        1080,
+        200
+      ],
+      "name": "Claim this approval",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "=http://api:8000/api/internal/approvals/{{ $json.body.approval_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cosApiInbound0001",
+          "name": "CommitmentOS API (n8n -> API secret)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "c570e263-03dd-cc13-fdfd-69cc463fcf87",
+      "position": [
+        1080,
+        540
+      ],
+      "name": "Claim approved actions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/internal/approvals/claim",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ limit: 10 }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cosApiInbound0001",
+          "name": "CommitmentOS API (n8n -> API secret)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "26e0459c-3e6b-497f-0547-2c75d5931147",
+      "position": [
+        1360,
+        370
+      ],
+      "name": "Split approvals",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Shared helpers, inlined into every Code node by build.js (a Code node cannot import local files).\nfunction truncate(value, max) {\n  const s = String(value == null ? '' : value);\n  return s.length > max ? `${s.slice(0, Math.max(0, max - 1))}…` : s;\n}\n\n// Error text is stored and shown to people: never let a token, key or password ride along in it.\nfunction redact(text) {\n  // A key must stand alone (or be a known compound such as client_secret): an error CODE like INVALID_WEBHOOK_SECRET is not a secret.\n  const key = '(?<![A-Za-z0-9_])(?:api[_-]?key|x-api-key|client[_-]?secret|access[_-]?token|refresh[_-]?token|auth[_-]?token|private[_-]?key|token|secret|password|passwd|authorization|x-webhook-secret|x-commitmentos-key)';\n  return String(text == null ? '' : text)\n    .replace(/(bearer|basic)\\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [redacted]')\n    .replace(new RegExp(`(${key}[\"']?\\\\s*[:=]\\\\s*[\"']?)[^\\\\s\"',;]+`, 'gi'), '$1[redacted]')\n    .replace(/(AIza|sk-|xox[abp]-)[A-Za-z0-9_-]{10,}/g, '[redacted]');\n}\n\n// An HTTP error from n8n reads `503 - \"<response body>\"`. That body can echo the request (a validation error quotes its\n// `input`, which may be somebody's email), so keep the status and CommitmentOS's own structured fields only.\nfunction safeHttpMessage(message) {\n  const m = /^(\\d{3}) - ([\\s\\S]*)$/.exec(String(message));\n  if (!m) return String(message);\n  let body = m[2].trim();\n  for (let i = 0; i < 2 && typeof body === 'string'; i += 1) {\n    try { body = JSON.parse(body); } catch (e) { return `HTTP ${m[1]}`; }\n  }\n  if (!body || typeof body !== 'object') return `HTTP ${m[1]}`;\n  if (Array.isArray(body.detail)) {\n    const fields = body.detail.map((d) => (d && Array.isArray(d.loc) ? d.loc.filter((x) => typeof x === 'string').join('.') : null)).filter(Boolean);\n    return `HTTP ${m[1]}: the request was invalid (${[...new Set(fields)].slice(0, 6).join(', ') || 'no field named'})`;\n  }\n  const code = typeof body.code === 'string' ? body.code : typeof body.status === 'string' ? body.status : null;\n  const detail = typeof body.detail === 'string' ? body.detail : typeof body.error_message === 'string' ? body.error_message : null;\n  return [`HTTP ${m[1]}`, code, detail && truncate(detail, 200)].filter(Boolean).join(': ');\n}\n\n// n8n hands errors over as Error objects, {message}, {error:{message}} or plain strings\nfunction errorMessage(e) {\n  if (e == null) return 'unknown error';\n  if (typeof e === 'string') return safeHttpMessage(e);\n  const inner = e.error && typeof e.error === 'object' ? e.error : e;\n  const parts = [inner.message || inner.description || e.message, /^\\d{3}$/.test(String(inner.httpCode)) ? `HTTP ${inner.httpCode}` : null].filter(Boolean);\n  return parts.length ? safeHttpMessage(parts.join(' - ')) : JSON.stringify(inner).slice(0, 300);\n}\n\nconst isEmail = (s) => typeof s === 'string' && /^[^\\s@<>()]+@[^\\s@<>()]+\\.[^\\s@<>()]+$/.test(s.trim());\n// Approved Actions: execute what a person approved (send a follow-up, add a calendar event) and report the result.\n\nconst claimedApprovals = (claim) => {\n  if (claim && claim.item) return [claim.item]; // push path: GET /approvals/{id}\n  return claim && Array.isArray(claim.items) ? claim.items : []; // pull path: POST /approvals/claim\n};\n\nfunction followUpMail(item) {\n  const p = item.payload || {};\n  return { from: item.from_email, to: p.to, replyTo: item.user_email, subject: p.subject, text: p.body };\n}\n\n// ---- iCalendar (RFC 5545): a real invite any calendar app can import -------------------------------------------------\nconst icsEscape = (s) => String(s == null ? '' : s).replace(/\\\\/g, '\\\\\\\\').replace(/;/g, '\\\\;').replace(/,/g, '\\\\,').replace(/\\r?\\n/g, '\\\\n');\nconst icsTime = (iso) => {\n  const d = new Date(iso);\n  if (Number.isNaN(d.getTime())) throw new Error(`invalid time in calendar payload: ${iso}`);\n  return d.toISOString().replace(/[-:]/g, '').replace(/\\.\\d{3}/, '');\n};\n// content lines are limited to 75 octets; longer ones continue on the next line after a single space\nfunction icsFold(line) {\n  const bytes = Buffer.from(line, 'utf8');\n  if (bytes.length <= 75) return line;\n  const parts = [];\n  let start = 0;\n  let limit = 75;\n  while (start < bytes.length) {\n    let end = Math.min(start + limit, bytes.length);\n    while (end < bytes.length && (bytes[end] & 0xc0) === 0x80) end -= 1; // never split a multi-byte character\n    parts.push(bytes.subarray(start, end).toString('utf8'));\n    start = end;\n    limit = 74;\n  }\n  return parts.join('\\r\\n ');\n}\n\nfunction buildIcs(item, nowIso = new Date().toISOString()) {\n  const p = item.payload || {};\n  const lines = [\n    'BEGIN:VCALENDAR',\n    'VERSION:2.0',\n    'PRODID:-//CommitmentOS//Calendar Sync//EN',\n    'CALSCALE:GREGORIAN',\n    'METHOD:PUBLISH',\n    'BEGIN:VEVENT',\n    `UID:approval-${item.id}@commitmentos`,\n    `DTSTAMP:${icsTime(nowIso)}`,\n    `DTSTART:${icsTime(p.start_at)}`,\n    `DTEND:${icsTime(p.end_at)}`,\n    `SUMMARY:${icsEscape(p.title)}`,\n    ...(p.description ? [`DESCRIPTION:${icsEscape(p.description)}`] : []),\n    ...(p.location ? [`LOCATION:${icsEscape(p.location)}`] : []),\n    'BEGIN:VALARM',\n    'ACTION:DISPLAY',\n    `DESCRIPTION:${icsEscape(p.title)}`,\n    'TRIGGER:-PT15M',\n    'END:VALARM',\n    'END:VEVENT',\n    'END:VCALENDAR',\n  ];\n  return `${lines.map(icsFold).join('\\r\\n')}\\r\\n`;\n}\n\nfunction inviteMail(item, nowIso) {\n  const p = item.payload || {};\n  return {\n    from: item.from_email,\n    to: item.user_email,\n    subject: `Calendar invite: ${p.title}`,\n    text: `You approved adding \"${p.title}\" to your calendar.\\nOpen the attached invite to add it (${p.start_at} to ${p.end_at}, ${p.timezone || 'UTC'}).`,\n    ics: buildIcs(item, nowIso),\n  };\n}\n\nfunction executionReport(item, outcome, detail, executionId) {\n  const base = { approval_id: item.id, n8n_execution_id: String(executionId) };\n  if (outcome === 'executed') return { event: 'approval.executed', ...base, result: detail || {} };\n  return { event: 'approval.failed', ...base, error: truncate(redact(errorMessage(detail)), 900) };\n}\n\nconst localCalendarResult = (item) => ({ provider: 'LOCAL', external_id: `local-${item.id}`, delivered_to: item.user_email });\nconst googleCalendarResult = (created) => ({ provider: 'GOOGLE', external_id: created && created.id, url: created && created.htmlLink });\n\nfunction summariseActions(reports) {\n  const done = reports.filter((r) => r.event === 'approval.executed').length;\n  const failed = reports.filter((r) => r.event === 'approval.failed');\n  return { total: reports.length, executed: done, failed: failed.length, errors: failed.slice(0, 5).map((r) => r.error), status: failed.length === 0 ? 'SUCCESS' : done === 0 ? 'FAILED' : 'PARTIAL' };\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = { claimedApprovals, followUpMail, buildIcs, inviteMail, executionReport, localCalendarResult, googleCalendarResult, summariseActions, icsFold, icsEscape, icsTime };\n}\n\n\nconst items = claimedApprovals($input.first().json);\nreturn items.length ? items.map((json) => ({ json, pairedItem: { item: 0 } })) : [{ json: { _idle: true } }];"
+      },
+      "notes": "One item per claimed approval, or an idle marker when there is nothing to run.",
+      "notesInFlow": true
+    },
+    {
+      "id": "7e107fc1-bff3-6ed3-0e16-604697108898",
+      "position": [
+        1640,
+        370
+      ],
+      "name": "Anything to run?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1c7bdce9-083d-1f20-4ff9-b19100ce20bf",
+              "leftValue": "={{ !$json._idle }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "3d155ee5-35a5-91b4-585a-fc77a4de7233",
+      "position": [
+        1920,
+        710
+      ],
+      "name": "Nothing to run",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return [{ json: { idle: true, executed: 0, n8n_execution_id: String($execution.id) } }];"
+      }
+    },
+    {
+      "id": "5f8e31e4-13c1-8b76-3d74-57f83ff294cd",
+      "position": [
+        1920,
+        370
+      ],
+      "name": "Which action?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "ae459dcc-f82e-e062-42ff-22807f96ec0b",
+                    "leftValue": "={{ $json.action_type }}",
+                    "rightValue": "SEND_FOLLOW_UP",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "SEND_FOLLOW_UP"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "108e25b4-8946-fb2b-4bb7-d662cd3d241a",
+                    "leftValue": "={{ $json.action_type }}",
+                    "rightValue": "CREATE_CALENDAR_EVENT",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CREATE_CALENDAR_EVENT"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "dd461d49-9ab4-caad-4b2a-a6045729b1f7",
+      "position": [
+        2200,
+        200
+      ],
+      "name": "Send follow-up",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "parameters": {
+        "resource": "email",
+        "operation": "send",
+        "fromEmail": "={{ $json.from_email }}",
+        "toEmail": "={{ $json.payload.to }}",
+        "subject": "={{ $json.payload.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.payload.body }}",
+        "options": {
+          "appendAttribution": false,
+          "replyTo": "={{ $json.user_email }}"
+        }
+      },
+      "credentials": {
+        "smtp": {
+          "id": "cosSmtp000000003",
+          "name": "SMTP (Mailpit in development)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "2f194c9e-8ff6-3d1c-afa0-9bd3d7427c98",
+      "position": [
+        2200,
+        540
+      ],
+      "name": "Google Calendar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fd0adee1-1207-8366-c634-929cb8198ca2",
+              "leftValue": "={{ $json.calendar_provider === \"google\" }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "5f0d15c2-2d88-d05b-ee20-96fd2bcc0eee",
+      "position": [
+        2480,
+        710
+      ],
+      "name": "Build invite",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Shared helpers, inlined into every Code node by build.js (a Code node cannot import local files).\nfunction truncate(value, max) {\n  const s = String(value == null ? '' : value);\n  return s.length > max ? `${s.slice(0, Math.max(0, max - 1))}…` : s;\n}\n\n// Error text is stored and shown to people: never let a token, key or password ride along in it.\nfunction redact(text) {\n  // A key must stand alone (or be a known compound such as client_secret): an error CODE like INVALID_WEBHOOK_SECRET is not a secret.\n  const key = '(?<![A-Za-z0-9_])(?:api[_-]?key|x-api-key|client[_-]?secret|access[_-]?token|refresh[_-]?token|auth[_-]?token|private[_-]?key|token|secret|password|passwd|authorization|x-webhook-secret|x-commitmentos-key)';\n  return String(text == null ? '' : text)\n    .replace(/(bearer|basic)\\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [redacted]')\n    .replace(new RegExp(`(${key}[\"']?\\\\s*[:=]\\\\s*[\"']?)[^\\\\s\"',;]+`, 'gi'), '$1[redacted]')\n    .replace(/(AIza|sk-|xox[abp]-)[A-Za-z0-9_-]{10,}/g, '[redacted]');\n}\n\n// An HTTP error from n8n reads `503 - \"<response body>\"`. That body can echo the request (a validation error quotes its\n// `input`, which may be somebody's email), so keep the status and CommitmentOS's own structured fields only.\nfunction safeHttpMessage(message) {\n  const m = /^(\\d{3}) - ([\\s\\S]*)$/.exec(String(message));\n  if (!m) return String(message);\n  let body = m[2].trim();\n  for (let i = 0; i < 2 && typeof body === 'string'; i += 1) {\n    try { body = JSON.parse(body); } catch (e) { return `HTTP ${m[1]}`; }\n  }\n  if (!body || typeof body !== 'object') return `HTTP ${m[1]}`;\n  if (Array.isArray(body.detail)) {\n    const fields = body.detail.map((d) => (d && Array.isArray(d.loc) ? d.loc.filter((x) => typeof x === 'string').join('.') : null)).filter(Boolean);\n    return `HTTP ${m[1]}: the request was invalid (${[...new Set(fields)].slice(0, 6).join(', ') || 'no field named'})`;\n  }\n  const code = typeof body.code === 'string' ? body.code : typeof body.status === 'string' ? body.status : null;\n  const detail = typeof body.detail === 'string' ? body.detail : typeof body.error_message === 'string' ? body.error_message : null;\n  return [`HTTP ${m[1]}`, code, detail && truncate(detail, 200)].filter(Boolean).join(': ');\n}\n\n// n8n hands errors over as Error objects, {message}, {error:{message}} or plain strings\nfunction errorMessage(e) {\n  if (e == null) return 'unknown error';\n  if (typeof e === 'string') return safeHttpMessage(e);\n  const inner = e.error && typeof e.error === 'object' ? e.error : e;\n  const parts = [inner.message || inner.description || e.message, /^\\d{3}$/.test(String(inner.httpCode)) ? `HTTP ${inner.httpCode}` : null].filter(Boolean);\n  return parts.length ? safeHttpMessage(parts.join(' - ')) : JSON.stringify(inner).slice(0, 300);\n}\n\nconst isEmail = (s) => typeof s === 'string' && /^[^\\s@<>()]+@[^\\s@<>()]+\\.[^\\s@<>()]+$/.test(s.trim());\n// Approved Actions: execute what a person approved (send a follow-up, add a calendar event) and report the result.\n\nconst claimedApprovals = (claim) => {\n  if (claim && claim.item) return [claim.item]; // push path: GET /approvals/{id}\n  return claim && Array.isArray(claim.items) ? claim.items : []; // pull path: POST /approvals/claim\n};\n\nfunction followUpMail(item) {\n  const p = item.payload || {};\n  return { from: item.from_email, to: p.to, replyTo: item.user_email, subject: p.subject, text: p.body };\n}\n\n// ---- iCalendar (RFC 5545): a real invite any calendar app can import -------------------------------------------------\nconst icsEscape = (s) => String(s == null ? '' : s).replace(/\\\\/g, '\\\\\\\\').replace(/;/g, '\\\\;').replace(/,/g, '\\\\,').replace(/\\r?\\n/g, '\\\\n');\nconst icsTime = (iso) => {\n  const d = new Date(iso);\n  if (Number.isNaN(d.getTime())) throw new Error(`invalid time in calendar payload: ${iso}`);\n  return d.toISOString().replace(/[-:]/g, '').replace(/\\.\\d{3}/, '');\n};\n// content lines are limited to 75 octets; longer ones continue on the next line after a single space\nfunction icsFold(line) {\n  const bytes = Buffer.from(line, 'utf8');\n  if (bytes.length <= 75) return line;\n  const parts = [];\n  let start = 0;\n  let limit = 75;\n  while (start < bytes.length) {\n    let end = Math.min(start + limit, bytes.length);\n    while (end < bytes.length && (bytes[end] & 0xc0) === 0x80) end -= 1; // never split a multi-byte character\n    parts.push(bytes.subarray(start, end).toString('utf8'));\n    start = end;\n    limit = 74;\n  }\n  return parts.join('\\r\\n ');\n}\n\nfunction buildIcs(item, nowIso = new Date().toISOString()) {\n  const p = item.payload || {};\n  const lines = [\n    'BEGIN:VCALENDAR',\n    'VERSION:2.0',\n    'PRODID:-//CommitmentOS//Calendar Sync//EN',\n    'CALSCALE:GREGORIAN',\n    'METHOD:PUBLISH',\n    'BEGIN:VEVENT',\n    `UID:approval-${item.id}@commitmentos`,\n    `DTSTAMP:${icsTime(nowIso)}`,\n    `DTSTART:${icsTime(p.start_at)}`,\n    `DTEND:${icsTime(p.end_at)}`,\n    `SUMMARY:${icsEscape(p.title)}`,\n    ...(p.description ? [`DESCRIPTION:${icsEscape(p.description)}`] : []),\n    ...(p.location ? [`LOCATION:${icsEscape(p.location)}`] : []),\n    'BEGIN:VALARM',\n    'ACTION:DISPLAY',\n    `DESCRIPTION:${icsEscape(p.title)}`,\n    'TRIGGER:-PT15M',\n    'END:VALARM',\n    'END:VEVENT',\n    'END:VCALENDAR',\n  ];\n  return `${lines.map(icsFold).join('\\r\\n')}\\r\\n`;\n}\n\nfunction inviteMail(item, nowIso) {\n  const p = item.payload || {};\n  return {\n    from: item.from_email,\n    to: item.user_email,\n    subject: `Calendar invite: ${p.title}`,\n    text: `You approved adding \"${p.title}\" to your calendar.\\nOpen the attached invite to add it (${p.start_at} to ${p.end_at}, ${p.timezone || 'UTC'}).`,\n    ics: buildIcs(item, nowIso),\n  };\n}\n\nfunction executionReport(item, outcome, detail, executionId) {\n  const base = { approval_id: item.id, n8n_execution_id: String(executionId) };\n  if (outcome === 'executed') return { event: 'approval.executed', ...base, result: detail || {} };\n  return { event: 'approval.failed', ...base, error: truncate(redact(errorMessage(detail)), 900) };\n}\n\nconst localCalendarResult = (item) => ({ provider: 'LOCAL', external_id: `local-${item.id}`, delivered_to: item.user_email });\nconst googleCalendarResult = (created) => ({ provider: 'GOOGLE', external_id: created && created.id, url: created && created.htmlLink });\n\nfunction summariseActions(reports) {\n  const done = reports.filter((r) => r.event === 'approval.executed').length;\n  const failed = reports.filter((r) => r.event === 'approval.failed');\n  return { total: reports.length, executed: done, failed: failed.length, errors: failed.slice(0, 5).map((r) => r.error), status: failed.length === 0 ? 'SUCCESS' : done === 0 ? 'FAILED' : 'PARTIAL' };\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = { claimedApprovals, followUpMail, buildIcs, inviteMail, executionReport, localCalendarResult, googleCalendarResult, summariseActions, icsFold, icsEscape, icsTime };\n}\n\n\nreturn $input.all().map((i) => {\n  const mail = inviteMail(i.json, new Date().toISOString());\n  return { json: { from: mail.from, to: mail.to, subject: mail.subject, text: mail.text }, binary: { invite: { data: Buffer.from(mail.ics, 'utf8').toString('base64'), mimeType: 'text/calendar', fileName: 'commitment.ics' } }, pairedItem: { item: 0 } };\n});"
+      }
+    },
+    {
+      "id": "ebdc4f09-7d7d-4542-d1b7-481ebb64b0b2",
+      "position": [
+        2760,
+        710
+      ],
+      "name": "Email the invite",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "parameters": {
+        "resource": "email",
+        "operation": "send",
+        "fromEmail": "={{ $json.from }}",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.text }}",
+        "options": {
+          "appendAttribution": false,
+          "attachments": "invite"
+        }
+      },
+      "credentials": {
+        "smtp": {
+          "id": "cosSmtp000000003",
+          "name": "SMTP (Mailpit in development)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "d88724bd-bbb7-da70-d979-62bdcc2c7442",
+      "position": [
+        2480,
+        370
+      ],
+      "name": "Google Calendar: create event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "parameters": {
+        "resource": "event",
+        "operation": "create",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "primary"
+        },
+        "start": "={{ $json.payload.start_at }}",
+        "end": "={{ $json.payload.end_at }}",
+        "additionalFields": {
+          "summary": "={{ $json.payload.title }}",
+          "description": "={{ $json.payload.description }}"
+        }
+      },
+      "disabled": true,
+      "onError": "continueErrorOutput",
+      "notes": "NOT VERIFIED - needs a Google Calendar OAuth credential (connect it in n8n, then enable this node).",
+      "notesInFlow": true
+    },
+    {
+      "id": "23c4ffaa-6454-2295-0026-0941690a99a5",
+      "position": [
+        2760,
+        370
+      ],
+      "name": "Google really created it?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return $input.all().map((i) => { if (i.json.kind !== 'calendar#event') throw new Error('Google Calendar did not return an event (is the node enabled and connected?)'); return i; });"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "848825a8-c4a5-c7fc-a93d-ebb7476be8cf",
+      "position": [
+        3040,
+        370
+      ],
+      "name": "Executed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Shared helpers, inlined into every Code node by build.js (a Code node cannot import local files).\nfunction truncate(value, max) {\n  const s = String(value == null ? '' : value);\n  return s.length > max ? `${s.slice(0, Math.max(0, max - 1))}…` : s;\n}\n\n// Error text is stored and shown to people: never let a token, key or password ride along in it.\nfunction redact(text) {\n  // A key must stand alone (or be a known compound such as client_secret): an error CODE like INVALID_WEBHOOK_SECRET is not a secret.\n  const key = '(?<![A-Za-z0-9_])(?:api[_-]?key|x-api-key|client[_-]?secret|access[_-]?token|refresh[_-]?token|auth[_-]?token|private[_-]?key|token|secret|password|passwd|authorization|x-webhook-secret|x-commitmentos-key)';\n  return String(text == null ? '' : text)\n    .replace(/(bearer|basic)\\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [redacted]')\n    .replace(new RegExp(`(${key}[\"']?\\\\s*[:=]\\\\s*[\"']?)[^\\\\s\"',;]+`, 'gi'), '$1[redacted]')\n    .replace(/(AIza|sk-|xox[abp]-)[A-Za-z0-9_-]{10,}/g, '[redacted]');\n}\n\n// An HTTP error from n8n reads `503 - \"<response body>\"`. That body can echo the request (a validation error quotes its\n// `input`, which may be somebody's email), so keep the status and CommitmentOS's own structured fields only.\nfunction safeHttpMessage(message) {\n  const m = /^(\\d{3}) - ([\\s\\S]*)$/.exec(String(message));\n  if (!m) return String(message);\n  let body = m[2].trim();\n  for (let i = 0; i < 2 && typeof body === 'string'; i += 1) {\n    try { body = JSON.parse(body); } catch (e) { return `HTTP ${m[1]}`; }\n  }\n  if (!body || typeof body !== 'object') return `HTTP ${m[1]}`;\n  if (Array.isArray(body.detail)) {\n    const fields = body.detail.map((d) => (d && Array.isArray(d.loc) ? d.loc.filter((x) => typeof x === 'string').join('.') : null)).filter(Boolean);\n    return `HTTP ${m[1]}: the request was invalid (${[...new Set(fields)].slice(0, 6).join(', ') || 'no field named'})`;\n  }\n  const code = typeof body.code === 'string' ? body.code : typeof body.status === 'string' ? body.status : null;\n  const detail = typeof body.detail === 'string' ? body.detail : typeof body.error_message === 'string' ? body.error_message : null;\n  return [`HTTP ${m[1]}`, code, detail && truncate(detail, 200)].filter(Boolean).join(': ');\n}\n\n// n8n hands errors over as Error objects, {message}, {error:{message}} or plain strings\nfunction errorMessage(e) {\n  if (e == null) return 'unknown error';\n  if (typeof e === 'string') return safeHttpMessage(e);\n  const inner = e.error && typeof e.error === 'object' ? e.error : e;\n  const parts = [inner.message || inner.description || e.message, /^\\d{3}$/.test(String(inner.httpCode)) ? `HTTP ${inner.httpCode}` : null].filter(Boolean);\n  return parts.length ? safeHttpMessage(parts.join(' - ')) : JSON.stringify(inner).slice(0, 300);\n}\n\nconst isEmail = (s) => typeof s === 'string' && /^[^\\s@<>()]+@[^\\s@<>()]+\\.[^\\s@<>()]+$/.test(s.trim());\n// Approved Actions: execute what a person approved (send a follow-up, add a calendar event) and report the result.\n\nconst claimedApprovals = (claim) => {\n  if (claim && claim.item) return [claim.item]; // push path: GET /approvals/{id}\n  return claim && Array.isArray(claim.items) ? claim.items : []; // pull path: POST /approvals/claim\n};\n\nfunction followUpMail(item) {\n  const p = item.payload || {};\n  return { from: item.from_email, to: p.to, replyTo: item.user_email, subject: p.subject, text: p.body };\n}\n\n// ---- iCalendar (RFC 5545): a real invite any calendar app can import -------------------------------------------------\nconst icsEscape = (s) => String(s == null ? '' : s).replace(/\\\\/g, '\\\\\\\\').replace(/;/g, '\\\\;').replace(/,/g, '\\\\,').replace(/\\r?\\n/g, '\\\\n');\nconst icsTime = (iso) => {\n  const d = new Date(iso);\n  if (Number.isNaN(d.getTime())) throw new Error(`invalid time in calendar payload: ${iso}`);\n  return d.toISOString().replace(/[-:]/g, '').replace(/\\.\\d{3}/, '');\n};\n// content lines are limited to 75 octets; longer ones continue on the next line after a single space\nfunction icsFold(line) {\n  const bytes = Buffer.from(line, 'utf8');\n  if (bytes.length <= 75) return line;\n  const parts = [];\n  let start = 0;\n  let limit = 75;\n  while (start < bytes.length) {\n    let end = Math.min(start + limit, bytes.length);\n    while (end < bytes.length && (bytes[end] & 0xc0) === 0x80) end -= 1; // never split a multi-byte character\n    parts.push(bytes.subarray(start, end).toString('utf8'));\n    start = end;\n    limit = 74;\n  }\n  return parts.join('\\r\\n ');\n}\n\nfunction buildIcs(item, nowIso = new Date().toISOString()) {\n  const p = item.payload || {};\n  const lines = [\n    'BEGIN:VCALENDAR',\n    'VERSION:2.0',\n    'PRODID:-//CommitmentOS//Calendar Sync//EN',\n    'CALSCALE:GREGORIAN',\n    'METHOD:PUBLISH',\n    'BEGIN:VEVENT',\n    `UID:approval-${item.id}@commitmentos`,\n    `DTSTAMP:${icsTime(nowIso)}`,\n    `DTSTART:${icsTime(p.start_at)}`,\n    `DTEND:${icsTime(p.end_at)}`,\n    `SUMMARY:${icsEscape(p.title)}`,\n    ...(p.description ? [`DESCRIPTION:${icsEscape(p.description)}`] : []),\n    ...(p.location ? [`LOCATION:${icsEscape(p.location)}`] : []),\n    'BEGIN:VALARM',\n    'ACTION:DISPLAY',\n    `DESCRIPTION:${icsEscape(p.title)}`,\n    'TRIGGER:-PT15M',\n    'END:VALARM',\n    'END:VEVENT',\n    'END:VCALENDAR',\n  ];\n  return `${lines.map(icsFold).join('\\r\\n')}\\r\\n`;\n}\n\nfunction inviteMail(item, nowIso) {\n  const p = item.payload || {};\n  return {\n    from: item.from_email,\n    to: item.user_email,\n    subject: `Calendar invite: ${p.title}`,\n    text: `You approved adding \"${p.title}\" to your calendar.\\nOpen the attached invite to add it (${p.start_at} to ${p.end_at}, ${p.timezone || 'UTC'}).`,\n    ics: buildIcs(item, nowIso),\n  };\n}\n\nfunction executionReport(item, outcome, detail, executionId) {\n  const base = { approval_id: item.id, n8n_execution_id: String(executionId) };\n  if (outcome === 'executed') return { event: 'approval.executed', ...base, result: detail || {} };\n  return { event: 'approval.failed', ...base, error: truncate(redact(errorMessage(detail)), 900) };\n}\n\nconst localCalendarResult = (item) => ({ provider: 'LOCAL', external_id: `local-${item.id}`, delivered_to: item.user_email });\nconst googleCalendarResult = (created) => ({ provider: 'GOOGLE', external_id: created && created.id, url: created && created.htmlLink });\n\nfunction summariseActions(reports) {\n  const done = reports.filter((r) => r.event === 'approval.executed').length;\n  const failed = reports.filter((r) => r.event === 'approval.failed');\n  return { total: reports.length, executed: done, failed: failed.length, errors: failed.slice(0, 5).map((r) => r.error), status: failed.length === 0 ? 'SUCCESS' : done === 0 ? 'FAILED' : 'PARTIAL' };\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = { claimedApprovals, followUpMail, buildIcs, inviteMail, executionReport, localCalendarResult, googleCalendarResult, summariseActions, icsFold, icsEscape, icsTime };\n}\n\n\nreturn $input.all().map((i, n) => {\n  const src = $('Split approvals').itemMatching(n).json;\n  const result = src.action_type === 'SEND_FOLLOW_UP' ? { message_id: i.json.messageId || null, accepted: i.json.accepted || [] }\n    : src.calendar_provider === 'google' ? googleCalendarResult(i.json) : localCalendarResult(src);\n  return { json: executionReport(src, 'executed', result, $execution.id) };\n});"
+      }
+    },
+    {
+      "id": "573f2e81-211a-ba92-ee98-4b94a956bc57",
+      "position": [
+        3040,
+        540
+      ],
+      "name": "Failed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Shared helpers, inlined into every Code node by build.js (a Code node cannot import local files).\nfunction truncate(value, max) {\n  const s = String(value == null ? '' : value);\n  return s.length > max ? `${s.slice(0, Math.max(0, max - 1))}…` : s;\n}\n\n// Error text is stored and shown to people: never let a token, key or password ride along in it.\nfunction redact(text) {\n  // A key must stand alone (or be a known compound such as client_secret): an error CODE like INVALID_WEBHOOK_SECRET is not a secret.\n  const key = '(?<![A-Za-z0-9_])(?:api[_-]?key|x-api-key|client[_-]?secret|access[_-]?token|refresh[_-]?token|auth[_-]?token|private[_-]?key|token|secret|password|passwd|authorization|x-webhook-secret|x-commitmentos-key)';\n  return String(text == null ? '' : text)\n    .replace(/(bearer|basic)\\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [redacted]')\n    .replace(new RegExp(`(${key}[\"']?\\\\s*[:=]\\\\s*[\"']?)[^\\\\s\"',;]+`, 'gi'), '$1[redacted]')\n    .replace(/(AIza|sk-|xox[abp]-)[A-Za-z0-9_-]{10,}/g, '[redacted]');\n}\n\n// An HTTP error from n8n reads `503 - \"<response body>\"`. That body can echo the request (a validation error quotes its\n// `input`, which may be somebody's email), so keep the status and CommitmentOS's own structured fields only.\nfunction safeHttpMessage(message) {\n  const m = /^(\\d{3}) - ([\\s\\S]*)$/.exec(String(message));\n  if (!m) return String(message);\n  let body = m[2].trim();\n  for (let i = 0; i < 2 && typeof body === 'string'; i += 1) {\n    try { body = JSON.parse(body); } catch (e) { return `HTTP ${m[1]}`; }\n  }\n  if (!body || typeof body !== 'object') return `HTTP ${m[1]}`;\n  if (Array.isArray(body.detail)) {\n    const fields = body.detail.map((d) => (d && Array.isArray(d.loc) ? d.loc.filter((x) => typeof x === 'string').join('.') : null)).filter(Boolean);\n    return `HTTP ${m[1]}: the request was invalid (${[...new Set(fields)].slice(0, 6).join(', ') || 'no field named'})`;\n  }\n  const code = typeof body.code === 'string' ? body.code : typeof body.status === 'string' ? body.status : null;\n  const detail = typeof body.detail === 'string' ? body.detail : typeof body.error_message === 'string' ? body.error_message : null;\n  return [`HTTP ${m[1]}`, code, detail && truncate(detail, 200)].filter(Boolean).join(': ');\n}\n\n// n8n hands errors over as Error objects, {message}, {error:{message}} or plain strings\nfunction errorMessage(e) {\n  if (e == null) return 'unknown error';\n  if (typeof e === 'string') return safeHttpMessage(e);\n  const inner = e.error && typeof e.error === 'object' ? e.error : e;\n  const parts = [inner.message || inner.description || e.message, /^\\d{3}$/.test(String(inner.httpCode)) ? `HTTP ${inner.httpCode}` : null].filter(Boolean);\n  return parts.length ? safeHttpMessage(parts.join(' - ')) : JSON.stringify(inner).slice(0, 300);\n}\n\nconst isEmail = (s) => typeof s === 'string' && /^[^\\s@<>()]+@[^\\s@<>()]+\\.[^\\s@<>()]+$/.test(s.trim());\n// Approved Actions: execute what a person approved (send a follow-up, add a calendar event) and report the result.\n\nconst claimedApprovals = (claim) => {\n  if (claim && claim.item) return [claim.item]; // push path: GET /approvals/{id}\n  return claim && Array.isArray(claim.items) ? claim.items : []; // pull path: POST /approvals/claim\n};\n\nfunction followUpMail(item) {\n  const p = item.payload || {};\n  return { from: item.from_email, to: p.to, replyTo: item.user_email, subject: p.subject, text: p.body };\n}\n\n// ---- iCalendar (RFC 5545): a real invite any calendar app can import -------------------------------------------------\nconst icsEscape = (s) => String(s == null ? '' : s).replace(/\\\\/g, '\\\\\\\\').replace(/;/g, '\\\\;').replace(/,/g, '\\\\,').replace(/\\r?\\n/g, '\\\\n');\nconst icsTime = (iso) => {\n  const d = new Date(iso);\n  if (Number.isNaN(d.getTime())) throw new Error(`invalid time in calendar payload: ${iso}`);\n  return d.toISOString().replace(/[-:]/g, '').replace(/\\.\\d{3}/, '');\n};\n// content lines are limited to 75 octets; longer ones continue on the next line after a single space\nfunction icsFold(line) {\n  const bytes = Buffer.from(line, 'utf8');\n  if (bytes.length <= 75) return line;\n  const parts = [];\n  let start = 0;\n  let limit = 75;\n  while (start < bytes.length) {\n    let end = Math.min(start + limit, bytes.length);\n    while (end < bytes.length && (bytes[end] & 0xc0) === 0x80) end -= 1; // never split a multi-byte character\n    parts.push(bytes.subarray(start, end).toString('utf8'));\n    start = end;\n    limit = 74;\n  }\n  return parts.join('\\r\\n ');\n}\n\nfunction buildIcs(item, nowIso = new Date().toISOString()) {\n  const p = item.payload || {};\n  const lines = [\n    'BEGIN:VCALENDAR',\n    'VERSION:2.0',\n    'PRODID:-//CommitmentOS//Calendar Sync//EN',\n    'CALSCALE:GREGORIAN',\n    'METHOD:PUBLISH',\n    'BEGIN:VEVENT',\n    `UID:approval-${item.id}@commitmentos`,\n    `DTSTAMP:${icsTime(nowIso)}`,\n    `DTSTART:${icsTime(p.start_at)}`,\n    `DTEND:${icsTime(p.end_at)}`,\n    `SUMMARY:${icsEscape(p.title)}`,\n    ...(p.description ? [`DESCRIPTION:${icsEscape(p.description)}`] : []),\n    ...(p.location ? [`LOCATION:${icsEscape(p.location)}`] : []),\n    'BEGIN:VALARM',\n    'ACTION:DISPLAY',\n    `DESCRIPTION:${icsEscape(p.title)}`,\n    'TRIGGER:-PT15M',\n    'END:VALARM',\n    'END:VEVENT',\n    'END:VCALENDAR',\n  ];\n  return `${lines.map(icsFold).join('\\r\\n')}\\r\\n`;\n}\n\nfunction inviteMail(item, nowIso) {\n  const p = item.payload || {};\n  return {\n    from: item.from_email,\n    to: item.user_email,\n    subject: `Calendar invite: ${p.title}`,\n    text: `You approved adding \"${p.title}\" to your calendar.\\nOpen the attached invite to add it (${p.start_at} to ${p.end_at}, ${p.timezone || 'UTC'}).`,\n    ics: buildIcs(item, nowIso),\n  };\n}\n\nfunction executionReport(item, outcome, detail, executionId) {\n  const base = { approval_id: item.id, n8n_execution_id: String(executionId) };\n  if (outcome === 'executed') return { event: 'approval.executed', ...base, result: detail || {} };\n  return { event: 'approval.failed', ...base, error: truncate(redact(errorMessage(detail)), 900) };\n}\n\nconst localCalendarResult = (item) => ({ provider: 'LOCAL', external_id: `local-${item.id}`, delivered_to: item.user_email });\nconst googleCalendarResult = (created) => ({ provider: 'GOOGLE', external_id: created && created.id, url: created && created.htmlLink });\n\nfunction summariseActions(reports) {\n  const done = reports.filter((r) => r.event === 'approval.executed').length;\n  const failed = reports.filter((r) => r.event === 'approval.failed');\n  return { total: reports.length, executed: done, failed: failed.length, errors: failed.slice(0, 5).map((r) => r.error), status: failed.length === 0 ? 'SUCCESS' : done === 0 ? 'FAILED' : 'PARTIAL' };\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = { claimedApprovals, followUpMail, buildIcs, inviteMail, executionReport, localCalendarResult, googleCalendarResult, summariseActions, icsFold, icsEscape, icsTime };\n}\n\n\nreturn $input.all().map((i, n) => ({ json: executionReport($('Split approvals').itemMatching(n).json, 'failed', i.json.error || i.json, $execution.id) }));"
+      }
+    },
+    {
+      "id": "97706af1-ec7b-11af-1b5a-a81fd42efe79",
+      "position": [
+        3320,
+        370
+      ],
+      "name": "Report outcome",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/webhooks/n8n",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cosApiInbound0001",
+          "name": "CommitmentOS API (n8n -> API secret)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "ea31d3c7-d10f-6e17-63fb-329ce62e46e4",
+      "position": [
+        3600,
+        370
+      ],
+      "name": "Summarise",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Shared helpers, inlined into every Code node by build.js (a Code node cannot import local files).\nfunction truncate(value, max) {\n  const s = String(value == null ? '' : value);\n  return s.length > max ? `${s.slice(0, Math.max(0, max - 1))}…` : s;\n}\n\n// Error text is stored and shown to people: never let a token, key or password ride along in it.\nfunction redact(text) {\n  // A key must stand alone (or be a known compound such as client_secret): an error CODE like INVALID_WEBHOOK_SECRET is not a secret.\n  const key = '(?<![A-Za-z0-9_])(?:api[_-]?key|x-api-key|client[_-]?secret|access[_-]?token|refresh[_-]?token|auth[_-]?token|private[_-]?key|token|secret|password|passwd|authorization|x-webhook-secret|x-commitmentos-key)';\n  return String(text == null ? '' : text)\n    .replace(/(bearer|basic)\\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [redacted]')\n    .replace(new RegExp(`(${key}[\"']?\\\\s*[:=]\\\\s*[\"']?)[^\\\\s\"',;]+`, 'gi'), '$1[redacted]')\n    .replace(/(AIza|sk-|xox[abp]-)[A-Za-z0-9_-]{10,}/g, '[redacted]');\n}\n\n// An HTTP error from n8n reads `503 - \"<response body>\"`. That body can echo the request (a validation error quotes its\n// `input`, which may be somebody's email), so keep the status and CommitmentOS's own structured fields only.\nfunction safeHttpMessage(message) {\n  const m = /^(\\d{3}) - ([\\s\\S]*)$/.exec(String(message));\n  if (!m) return String(message);\n  let body = m[2].trim();\n  for (let i = 0; i < 2 && typeof body === 'string'; i += 1) {\n    try { body = JSON.parse(body); } catch (e) { return `HTTP ${m[1]}`; }\n  }\n  if (!body || typeof body !== 'object') return `HTTP ${m[1]}`;\n  if (Array.isArray(body.detail)) {\n    const fields = body.detail.map((d) => (d && Array.isArray(d.loc) ? d.loc.filter((x) => typeof x === 'string').join('.') : null)).filter(Boolean);\n    return `HTTP ${m[1]}: the request was invalid (${[...new Set(fields)].slice(0, 6).join(', ') || 'no field named'})`;\n  }\n  const code = typeof body.code === 'string' ? body.code : typeof body.status === 'string' ? body.status : null;\n  const detail = typeof body.detail === 'string' ? body.detail : typeof body.error_message === 'string' ? body.error_message : null;\n  return [`HTTP ${m[1]}`, code, detail && truncate(detail, 200)].filter(Boolean).join(': ');\n}\n\n// n8n hands errors over as Error objects, {message}, {error:{message}} or plain strings\nfunction errorMessage(e) {\n  if (e == null) return 'unknown error';\n  if (typeof e === 'string') return safeHttpMessage(e);\n  const inner = e.error && typeof e.error === 'object' ? e.error : e;\n  const parts = [inner.message || inner.description || e.message, /^\\d{3}$/.test(String(inner.httpCode)) ? `HTTP ${inner.httpCode}` : null].filter(Boolean);\n  return parts.length ? safeHttpMessage(parts.join(' - ')) : JSON.stringify(inner).slice(0, 300);\n}\n\nconst isEmail = (s) => typeof s === 'string' && /^[^\\s@<>()]+@[^\\s@<>()]+\\.[^\\s@<>()]+$/.test(s.trim());\n// Approved Actions: execute what a person approved (send a follow-up, add a calendar event) and report the result.\n\nconst claimedApprovals = (claim) => {\n  if (claim && claim.item) return [claim.item]; // push path: GET /approvals/{id}\n  return claim && Array.isArray(claim.items) ? claim.items : []; // pull path: POST /approvals/claim\n};\n\nfunction followUpMail(item) {\n  const p = item.payload || {};\n  return { from: item.from_email, to: p.to, replyTo: item.user_email, subject: p.subject, text: p.body };\n}\n\n// ---- iCalendar (RFC 5545): a real invite any calendar app can import -------------------------------------------------\nconst icsEscape = (s) => String(s == null ? '' : s).replace(/\\\\/g, '\\\\\\\\').replace(/;/g, '\\\\;').replace(/,/g, '\\\\,').replace(/\\r?\\n/g, '\\\\n');\nconst icsTime = (iso) => {\n  const d = new Date(iso);\n  if (Number.isNaN(d.getTime())) throw new Error(`invalid time in calendar payload: ${iso}`);\n  return d.toISOString().replace(/[-:]/g, '').replace(/\\.\\d{3}/, '');\n};\n// content lines are limited to 75 octets; longer ones continue on the next line after a single space\nfunction icsFold(line) {\n  const bytes = Buffer.from(line, 'utf8');\n  if (bytes.length <= 75) return line;\n  const parts = [];\n  let start = 0;\n  let limit = 75;\n  while (start < bytes.length) {\n    let end = Math.min(start + limit, bytes.length);\n    while (end < bytes.length && (bytes[end] & 0xc0) === 0x80) end -= 1; // never split a multi-byte character\n    parts.push(bytes.subarray(start, end).toString('utf8'));\n    start = end;\n    limit = 74;\n  }\n  return parts.join('\\r\\n ');\n}\n\nfunction buildIcs(item, nowIso = new Date().toISOString()) {\n  const p = item.payload || {};\n  const lines = [\n    'BEGIN:VCALENDAR',\n    'VERSION:2.0',\n    'PRODID:-//CommitmentOS//Calendar Sync//EN',\n    'CALSCALE:GREGORIAN',\n    'METHOD:PUBLISH',\n    'BEGIN:VEVENT',\n    `UID:approval-${item.id}@commitmentos`,\n    `DTSTAMP:${icsTime(nowIso)}`,\n    `DTSTART:${icsTime(p.start_at)}`,\n    `DTEND:${icsTime(p.end_at)}`,\n    `SUMMARY:${icsEscape(p.title)}`,\n    ...(p.description ? [`DESCRIPTION:${icsEscape(p.description)}`] : []),\n    ...(p.location ? [`LOCATION:${icsEscape(p.location)}`] : []),\n    'BEGIN:VALARM',\n    'ACTION:DISPLAY',\n    `DESCRIPTION:${icsEscape(p.title)}`,\n    'TRIGGER:-PT15M',\n    'END:VALARM',\n    'END:VEVENT',\n    'END:VCALENDAR',\n  ];\n  return `${lines.map(icsFold).join('\\r\\n')}\\r\\n`;\n}\n\nfunction inviteMail(item, nowIso) {\n  const p = item.payload || {};\n  return {\n    from: item.from_email,\n    to: item.user_email,\n    subject: `Calendar invite: ${p.title}`,\n    text: `You approved adding \"${p.title}\" to your calendar.\\nOpen the attached invite to add it (${p.start_at} to ${p.end_at}, ${p.timezone || 'UTC'}).`,\n    ics: buildIcs(item, nowIso),\n  };\n}\n\nfunction executionReport(item, outcome, detail, executionId) {\n  const base = { approval_id: item.id, n8n_execution_id: String(executionId) };\n  if (outcome === 'executed') return { event: 'approval.executed', ...base, result: detail || {} };\n  return { event: 'approval.failed', ...base, error: truncate(redact(errorMessage(detail)), 900) };\n}\n\nconst localCalendarResult = (item) => ({ provider: 'LOCAL', external_id: `local-${item.id}`, delivered_to: item.user_email });\nconst googleCalendarResult = (created) => ({ provider: 'GOOGLE', external_id: created && created.id, url: created && created.htmlLink });\n\nfunction summariseActions(reports) {\n  const done = reports.filter((r) => r.event === 'approval.executed').length;\n  const failed = reports.filter((r) => r.event === 'approval.failed');\n  return { total: reports.length, executed: done, failed: failed.length, errors: failed.slice(0, 5).map((r) => r.error), status: failed.length === 0 ? 'SUCCESS' : done === 0 ? 'FAILED' : 'PARTIAL' };\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = { claimedApprovals, followUpMail, buildIcs, inviteMail, executionReport, localCalendarResult, googleCalendarResult, summariseActions, icsFold, icsEscape, icsTime };\n}\n\n\nreturn [{ json: summariseActions($input.all().map((i) => ({ event: i.json.event, error: i.json.error || null }))) }];"
+      }
+    },
+    {
+      "id": "23d0e802-1dd5-afbd-0346-fc02e0568a9c",
+      "position": [
+        3880,
+        370
+      ],
+      "name": "Report run",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/webhooks/n8n",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ event: 'run.finished', workflow_key: 'approved-actions', n8n_execution_id: String($execution.id), n8n_workflow_id: $workflow.id, workflow_name: $workflow.name, trigger: $('Mark start').first().json._trigger, status: $json.status, result: { executed: $json.executed, failed: $json.failed }, error: $json.failed ? $json.errors.join('; ') : null, duration_ms: Math.max(0, Date.now() - $('Mark start').first().json._t0) }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cosApiInbound0001",
+          "name": "CommitmentOS API (n8n -> API secret)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "1196da3b-06fd-c245-47ac-4d0ceeeb1627",
+      "position": [
+        4160,
+        370
+      ],
+      "name": "Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return [{ json: { ...$('Summarise').first().json, n8n_execution_id: String($execution.id) } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Approved by the user (webhook)": {
+      "main": [
+        [
+          {
+            "node": "Mark start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every 2 minutes (catch-up)": {
+      "main": [
+        [
+          {
+            "node": "Mark start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark start": {
+      "main": [
+        [
+          {
+            "node": "Named in the webhook?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Named in the webhook?": {
+      "main": [
+        [
+          {
+            "node": "Claim this approval",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Claim approved actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim this approval": {
+      "main": [
+        [
+          {
+            "node": "Split approvals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim approved actions": {
+      "main": [
+        [
+          {
+            "node": "Split approvals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split approvals": {
+      "main": [
+        [
+          {
+            "node": "Anything to run?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anything to run?": {
+      "main": [
+        [
+          {
+            "node": "Which action?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Nothing to run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Which action?": {
+      "main": [
+        [
+          {
+            "node": "Send follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Calendar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar?": {
+      "main": [
+        [
+          {
+            "node": "Google Calendar: create event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build invite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build invite": {
+      "main": [
+        [
+          {
+            "node": "Email the invite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar: create event": {
+      "main": [
+        [
+          {
+            "node": "Google really created it?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send follow-up": {
+      "main": [
+        [
+          {
+            "node": "Executed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email the invite": {
+      "main": [
+        [
+          {
+            "node": "Executed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google really created it?": {
+      "main": [
+        [
+          {
+            "node": "Executed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Executed": {
+      "main": [
+        [
+          {
+            "node": "Report outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Failed": {
+      "main": [
+        [
+          {
+            "node": "Report outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Report outcome": {
+      "main": [
+        [
+          {
+            "node": "Summarise",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarise": {
+      "main": [
+        [
+          {
+            "node": "Report run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Report run": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveExecutionProgress": false,
+    "errorWorkflow": "cosWfErrorHandler01"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "builtFrom": "automation/n8n/build.js",
+    "description": "Executes actions a person has approved."
+  },
+  "versionId": "bad5fb4f-1277-fe4f-bcb3-6d1a2ebf99de"
+}

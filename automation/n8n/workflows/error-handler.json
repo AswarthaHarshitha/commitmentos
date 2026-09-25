@@ -1,0 +1,101 @@
+{
+  "id": "cosWfErrorHandler01",
+  "name": "Error Handler",
+  "active": true,
+  "nodes": [
+    {
+      "id": "9396d818-b6e2-7153-8c14-8c854805f539",
+      "position": [
+        240,
+        200
+      ],
+      "name": "Workflow failed",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "parameters": {}
+    },
+    {
+      "id": "d22eab5e-070f-64eb-539a-e0ac9fc9a303",
+      "position": [
+        520,
+        200
+      ],
+      "name": "Shape failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Shared helpers, inlined into every Code node by build.js (a Code node cannot import local files).\nfunction truncate(value, max) {\n  const s = String(value == null ? '' : value);\n  return s.length > max ? `${s.slice(0, Math.max(0, max - 1))}…` : s;\n}\n\n// Error text is stored and shown to people: never let a token, key or password ride along in it.\nfunction redact(text) {\n  // A key must stand alone (or be a known compound such as client_secret): an error CODE like INVALID_WEBHOOK_SECRET is not a secret.\n  const key = '(?<![A-Za-z0-9_])(?:api[_-]?key|x-api-key|client[_-]?secret|access[_-]?token|refresh[_-]?token|auth[_-]?token|private[_-]?key|token|secret|password|passwd|authorization|x-webhook-secret|x-commitmentos-key)';\n  return String(text == null ? '' : text)\n    .replace(/(bearer|basic)\\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [redacted]')\n    .replace(new RegExp(`(${key}[\"']?\\\\s*[:=]\\\\s*[\"']?)[^\\\\s\"',;]+`, 'gi'), '$1[redacted]')\n    .replace(/(AIza|sk-|xox[abp]-)[A-Za-z0-9_-]{10,}/g, '[redacted]');\n}\n\n// An HTTP error from n8n reads `503 - \"<response body>\"`. That body can echo the request (a validation error quotes its\n// `input`, which may be somebody's email), so keep the status and CommitmentOS's own structured fields only.\nfunction safeHttpMessage(message) {\n  const m = /^(\\d{3}) - ([\\s\\S]*)$/.exec(String(message));\n  if (!m) return String(message);\n  let body = m[2].trim();\n  for (let i = 0; i < 2 && typeof body === 'string'; i += 1) {\n    try { body = JSON.parse(body); } catch (e) { return `HTTP ${m[1]}`; }\n  }\n  if (!body || typeof body !== 'object') return `HTTP ${m[1]}`;\n  if (Array.isArray(body.detail)) {\n    const fields = body.detail.map((d) => (d && Array.isArray(d.loc) ? d.loc.filter((x) => typeof x === 'string').join('.') : null)).filter(Boolean);\n    return `HTTP ${m[1]}: the request was invalid (${[...new Set(fields)].slice(0, 6).join(', ') || 'no field named'})`;\n  }\n  const code = typeof body.code === 'string' ? body.code : typeof body.status === 'string' ? body.status : null;\n  const detail = typeof body.detail === 'string' ? body.detail : typeof body.error_message === 'string' ? body.error_message : null;\n  return [`HTTP ${m[1]}`, code, detail && truncate(detail, 200)].filter(Boolean).join(': ');\n}\n\n// n8n hands errors over as Error objects, {message}, {error:{message}} or plain strings\nfunction errorMessage(e) {\n  if (e == null) return 'unknown error';\n  if (typeof e === 'string') return safeHttpMessage(e);\n  const inner = e.error && typeof e.error === 'object' ? e.error : e;\n  const parts = [inner.message || inner.description || e.message, /^\\d{3}$/.test(String(inner.httpCode)) ? `HTTP ${inner.httpCode}` : null].filter(Boolean);\n  return parts.length ? safeHttpMessage(parts.join(' - ')) : JSON.stringify(inner).slice(0, 300);\n}\n\nconst isEmail = (s) => typeof s === 'string' && /^[^\\s@<>()]+@[^\\s@<>()]+\\.[^\\s@<>()]+$/.test(s.trim());\n// Error Handler: shape n8n's Error Trigger payload into a run.failed event for the API's automation history.\n\nfunction shapeError(payload, workflowKeys = {}, nowMs = Date.now()) {\n  const execution = (payload && payload.execution) || {};\n  const workflow = (payload && payload.workflow) || {};\n  const message = truncate(redact(errorMessage(execution.error || payload)), 1500);\n  return {\n    event: 'run.failed',\n    n8n_execution_id: String(execution.id != null ? execution.id : `err-${nowMs}`),\n    workflow_key: workflowKeys[workflow.id] || 'unknown',\n    n8n_workflow_id: workflow.id != null ? String(workflow.id) : null,\n    workflow_name: workflow.name || null,\n    status: 'FAILED',\n    error: message,\n    error_node: execution.lastNodeExecuted || null,\n  };\n}\n\nif (typeof module !== 'undefined' && module.exports) module.exports = { shapeError };\n\n\nconst KEYS = {\"cosWfErrorHandler01\":\"error-handler\",\"cosWfDispatch00001\":\"notification-dispatcher\",\"cosWfIncoming00001\":\"incoming-detection\",\"cosWfMonitor000001\":\"deadline-monitor\",\"cosWfActions000001\":\"approved-actions\",\"cosWfCalendar00001\":\"calendar-sync\",\"cosWfFollowUp00001\":\"follow-up-assistant\",\"cosWfCompletion001\":\"completion-detection\"};\nreturn $input.all().map((i) => ({ json: shapeError(i.json, KEYS) }));"
+      }
+    },
+    {
+      "id": "0749f7a4-bfef-9965-65b5-f564ca391f50",
+      "position": [
+        800,
+        200
+      ],
+      "name": "Report failed run",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/webhooks/n8n",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cosApiInbound0001",
+          "name": "CommitmentOS API (n8n -> API secret)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Workflow failed": {
+      "main": [
+        [
+          {
+            "node": "Shape failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape failure": {
+      "main": [
+        [
+          {
+            "node": "Report failed run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveExecutionProgress": false
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "builtFrom": "automation/n8n/build.js",
+    "description": "Reports any failed workflow execution to the automation history."
+  },
+  "versionId": "83e624be-557b-285c-e5f3-0d89aff755b5"
+}

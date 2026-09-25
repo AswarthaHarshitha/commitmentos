@@ -1,0 +1,644 @@
+{
+  "id": "cosWfDispatch00001",
+  "name": "Notification Dispatcher",
+  "active": true,
+  "nodes": [
+    {
+      "id": "706171e3-bd5a-390e-b784-76c42a9c6e31",
+      "position": [
+        240,
+        200
+      ],
+      "name": "Every minute",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "1da0050b-8a40-1759-fbf3-ea693f9eef54",
+      "position": [
+        240,
+        370
+      ],
+      "name": "Run now (webhook)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "commitmentos-dispatch",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cosWebhookAuth0002",
+          "name": "CommitmentOS webhooks (API -> n8n secret)"
+        }
+      },
+      "webhookId": "6435f3bd-486b-6914-edd1-b34f7034a8ba"
+    },
+    {
+      "id": "95514269-7310-61f8-529a-94a650b7801e",
+      "position": [
+        240,
+        540
+      ],
+      "name": "Called by another workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "90034dfa-d096-d830-8b20-a341eea037a4",
+      "position": [
+        520,
+        370
+      ],
+      "name": "Mark start",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const first = $input.first()?.json ?? {};\nconst trigger = 'headers' in first && 'body' in first ? 'WEBHOOK' : 'timestamp' in first ? 'SCHEDULE' : 'SUBWORKFLOW';\nreturn $input.all().map((i) => ({ json: { ...i.json, _t0: Date.now(), _trigger: trigger } }));"
+      },
+      "notes": "Remembers when this run began and what started it (for the run duration and trigger).",
+      "notesInFlow": true
+    },
+    {
+      "id": "aa7d9bd8-dd80-8ddc-ae76-1ebc13ea2b0d",
+      "position": [
+        800,
+        370
+      ],
+      "name": "Claim notifications",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/internal/notifications/claim",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ limit: 25 }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cosApiInbound0001",
+          "name": "CommitmentOS API (n8n -> API secret)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "7d3836a2-84c2-0da3-1e70-723c63b2a431",
+      "position": [
+        1080,
+        370
+      ],
+      "name": "Split claimed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Shared helpers, inlined into every Code node by build.js (a Code node cannot import local files).\nfunction truncate(value, max) {\n  const s = String(value == null ? '' : value);\n  return s.length > max ? `${s.slice(0, Math.max(0, max - 1))}…` : s;\n}\n\n// Error text is stored and shown to people: never let a token, key or password ride along in it.\nfunction redact(text) {\n  // A key must stand alone (or be a known compound such as client_secret): an error CODE like INVALID_WEBHOOK_SECRET is not a secret.\n  const key = '(?<![A-Za-z0-9_])(?:api[_-]?key|x-api-key|client[_-]?secret|access[_-]?token|refresh[_-]?token|auth[_-]?token|private[_-]?key|token|secret|password|passwd|authorization|x-webhook-secret|x-commitmentos-key)';\n  return String(text == null ? '' : text)\n    .replace(/(bearer|basic)\\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [redacted]')\n    .replace(new RegExp(`(${key}[\"']?\\\\s*[:=]\\\\s*[\"']?)[^\\\\s\"',;]+`, 'gi'), '$1[redacted]')\n    .replace(/(AIza|sk-|xox[abp]-)[A-Za-z0-9_-]{10,}/g, '[redacted]');\n}\n\n// An HTTP error from n8n reads `503 - \"<response body>\"`. That body can echo the request (a validation error quotes its\n// `input`, which may be somebody's email), so keep the status and CommitmentOS's own structured fields only.\nfunction safeHttpMessage(message) {\n  const m = /^(\\d{3}) - ([\\s\\S]*)$/.exec(String(message));\n  if (!m) return String(message);\n  let body = m[2].trim();\n  for (let i = 0; i < 2 && typeof body === 'string'; i += 1) {\n    try { body = JSON.parse(body); } catch (e) { return `HTTP ${m[1]}`; }\n  }\n  if (!body || typeof body !== 'object') return `HTTP ${m[1]}`;\n  if (Array.isArray(body.detail)) {\n    const fields = body.detail.map((d) => (d && Array.isArray(d.loc) ? d.loc.filter((x) => typeof x === 'string').join('.') : null)).filter(Boolean);\n    return `HTTP ${m[1]}: the request was invalid (${[...new Set(fields)].slice(0, 6).join(', ') || 'no field named'})`;\n  }\n  const code = typeof body.code === 'string' ? body.code : typeof body.status === 'string' ? body.status : null;\n  const detail = typeof body.detail === 'string' ? body.detail : typeof body.error_message === 'string' ? body.error_message : null;\n  return [`HTTP ${m[1]}`, code, detail && truncate(detail, 200)].filter(Boolean).join(': ');\n}\n\n// n8n hands errors over as Error objects, {message}, {error:{message}} or plain strings\nfunction errorMessage(e) {\n  if (e == null) return 'unknown error';\n  if (typeof e === 'string') return safeHttpMessage(e);\n  const inner = e.error && typeof e.error === 'object' ? e.error : e;\n  const parts = [inner.message || inner.description || e.message, /^\\d{3}$/.test(String(inner.httpCode)) ? `HTTP ${inner.httpCode}` : null].filter(Boolean);\n  return parts.length ? safeHttpMessage(parts.join(' - ')) : JSON.stringify(inner).slice(0, 300);\n}\n\nconst isEmail = (s) => typeof s === 'string' && /^[^\\s@<>()]+@[^\\s@<>()]+\\.[^\\s@<>()]+$/.test(s.trim());\n// Notification Dispatcher: hand out claimed notifications, report each outcome, summarise the run.\n\nconst claimedItems = (claim) => (claim && Array.isArray(claim.items) ? claim.items : []);\n\n// one report per notification, built from the delivery outcome (an error item still carries the original notification)\nfunction deliveryReport(item, outcome, executionId) {\n  const base = { notification_id: item.id, n8n_execution_id: String(executionId) };\n  if (outcome === 'sent') return { event: 'notification.sent', ...base };\n  return { event: 'notification.failed', ...base, error: truncate(redact(errorMessage(item.error || item)), 900) };\n}\n\nfunction summariseDispatch(outcomes) {\n  const sent = outcomes.filter((o) => o.event === 'notification.sent').length;\n  const failed = outcomes.filter((o) => o.event === 'notification.failed');\n  return {\n    total: outcomes.length,\n    sent,\n    failed: failed.length,\n    errors: failed.slice(0, 5).map((o) => o.error),\n    status: failed.length === 0 ? 'SUCCESS' : sent === 0 ? 'FAILED' : 'PARTIAL',\n  };\n}\n\nif (typeof module !== 'undefined' && module.exports) module.exports = { claimedItems, deliveryReport, summariseDispatch };\n\n\nconst items = claimedItems($input.first().json);\nreturn items.length ? items.map((json) => ({ json })) : [{ json: { _idle: true } }];"
+      },
+      "notes": "One item per claimed notification, or a single idle marker when nothing is queued.",
+      "notesInFlow": true
+    },
+    {
+      "id": "f5b7d5a4-89a8-11bc-7e87-4575e4027826",
+      "position": [
+        1360,
+        370
+      ],
+      "name": "Anything to send?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1c7bdce9-083d-1f20-4ff9-b19100ce20bf",
+              "leftValue": "={{ !$json._idle }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ae10d88a-db0e-9f00-b23f-f7bbae0ce27f",
+      "position": [
+        1640,
+        710
+      ],
+      "name": "Nothing to send",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return [{ json: { idle: true, sent: 0 } }];"
+      }
+    },
+    {
+      "id": "ae9f7f10-23d5-8c2d-d6be-2a6f7b9e33d1",
+      "position": [
+        1640,
+        370
+      ],
+      "name": "Channel",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "0cbd76fc-41dc-3202-f754-9f6bad9f2c25",
+                    "leftValue": "={{ $json.channel }}",
+                    "rightValue": "EMAIL",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "EMAIL"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "6e4282c0-f467-07d0-f43f-250db8b978d9",
+                    "leftValue": "={{ $json.channel }}",
+                    "rightValue": "TELEGRAM",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "TELEGRAM"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a3d94da3-ecc3-046f-11ce-3b101ec6c23b",
+      "position": [
+        1920,
+        200
+      ],
+      "name": "Send email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "parameters": {
+        "resource": "email",
+        "operation": "send",
+        "fromEmail": "={{ $json.from_email }}",
+        "toEmail": "={{ $json.to_email }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "both",
+        "text": "={{ $json.text }}",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "smtp": {
+          "id": "cosSmtp000000003",
+          "name": "SMTP (Mailpit in development)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "d4dda970-87a0-cdb1-043f-6d7e7952cd7e",
+      "position": [
+        1920,
+        540
+      ],
+      "name": "Send Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.telegram_chat_id }}",
+        "text": "={{ $json.subject }}\n\n{{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "cosTelegram00004",
+          "name": "Telegram bot"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "48e6b9b2-834d-2d2f-f998-0946719edfe4",
+      "position": [
+        2200,
+        540
+      ],
+      "name": "Telegram really sent?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return $input.all().map((i) => { if (!i.json.message_id) throw new Error('Telegram did not confirm the message (is the bot connected?)'); return i; });"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "6f2525c5-2c91-622c-69f0-2e1b4bdc484a",
+      "position": [
+        2200,
+        200
+      ],
+      "name": "Sent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Shared helpers, inlined into every Code node by build.js (a Code node cannot import local files).\nfunction truncate(value, max) {\n  const s = String(value == null ? '' : value);\n  return s.length > max ? `${s.slice(0, Math.max(0, max - 1))}…` : s;\n}\n\n// Error text is stored and shown to people: never let a token, key or password ride along in it.\nfunction redact(text) {\n  // A key must stand alone (or be a known compound such as client_secret): an error CODE like INVALID_WEBHOOK_SECRET is not a secret.\n  const key = '(?<![A-Za-z0-9_])(?:api[_-]?key|x-api-key|client[_-]?secret|access[_-]?token|refresh[_-]?token|auth[_-]?token|private[_-]?key|token|secret|password|passwd|authorization|x-webhook-secret|x-commitmentos-key)';\n  return String(text == null ? '' : text)\n    .replace(/(bearer|basic)\\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [redacted]')\n    .replace(new RegExp(`(${key}[\"']?\\\\s*[:=]\\\\s*[\"']?)[^\\\\s\"',;]+`, 'gi'), '$1[redacted]')\n    .replace(/(AIza|sk-|xox[abp]-)[A-Za-z0-9_-]{10,}/g, '[redacted]');\n}\n\n// An HTTP error from n8n reads `503 - \"<response body>\"`. That body can echo the request (a validation error quotes its\n// `input`, which may be somebody's email), so keep the status and CommitmentOS's own structured fields only.\nfunction safeHttpMessage(message) {\n  const m = /^(\\d{3}) - ([\\s\\S]*)$/.exec(String(message));\n  if (!m) return String(message);\n  let body = m[2].trim();\n  for (let i = 0; i < 2 && typeof body === 'string'; i += 1) {\n    try { body = JSON.parse(body); } catch (e) { return `HTTP ${m[1]}`; }\n  }\n  if (!body || typeof body !== 'object') return `HTTP ${m[1]}`;\n  if (Array.isArray(body.detail)) {\n    const fields = body.detail.map((d) => (d && Array.isArray(d.loc) ? d.loc.filter((x) => typeof x === 'string').join('.') : null)).filter(Boolean);\n    return `HTTP ${m[1]}: the request was invalid (${[...new Set(fields)].slice(0, 6).join(', ') || 'no field named'})`;\n  }\n  const code = typeof body.code === 'string' ? body.code : typeof body.status === 'string' ? body.status : null;\n  const detail = typeof body.detail === 'string' ? body.detail : typeof body.error_message === 'string' ? body.error_message : null;\n  return [`HTTP ${m[1]}`, code, detail && truncate(detail, 200)].filter(Boolean).join(': ');\n}\n\n// n8n hands errors over as Error objects, {message}, {error:{message}} or plain strings\nfunction errorMessage(e) {\n  if (e == null) return 'unknown error';\n  if (typeof e === 'string') return safeHttpMessage(e);\n  const inner = e.error && typeof e.error === 'object' ? e.error : e;\n  const parts = [inner.message || inner.description || e.message, /^\\d{3}$/.test(String(inner.httpCode)) ? `HTTP ${inner.httpCode}` : null].filter(Boolean);\n  return parts.length ? safeHttpMessage(parts.join(' - ')) : JSON.stringify(inner).slice(0, 300);\n}\n\nconst isEmail = (s) => typeof s === 'string' && /^[^\\s@<>()]+@[^\\s@<>()]+\\.[^\\s@<>()]+$/.test(s.trim());\n// Notification Dispatcher: hand out claimed notifications, report each outcome, summarise the run.\n\nconst claimedItems = (claim) => (claim && Array.isArray(claim.items) ? claim.items : []);\n\n// one report per notification, built from the delivery outcome (an error item still carries the original notification)\nfunction deliveryReport(item, outcome, executionId) {\n  const base = { notification_id: item.id, n8n_execution_id: String(executionId) };\n  if (outcome === 'sent') return { event: 'notification.sent', ...base };\n  return { event: 'notification.failed', ...base, error: truncate(redact(errorMessage(item.error || item)), 900) };\n}\n\nfunction summariseDispatch(outcomes) {\n  const sent = outcomes.filter((o) => o.event === 'notification.sent').length;\n  const failed = outcomes.filter((o) => o.event === 'notification.failed');\n  return {\n    total: outcomes.length,\n    sent,\n    failed: failed.length,\n    errors: failed.slice(0, 5).map((o) => o.error),\n    status: failed.length === 0 ? 'SUCCESS' : sent === 0 ? 'FAILED' : 'PARTIAL',\n  };\n}\n\nif (typeof module !== 'undefined' && module.exports) module.exports = { claimedItems, deliveryReport, summariseDispatch };\n\n\nreturn $input.all().map((_, n) => ({ json: deliveryReport($('Split claimed').itemMatching(n).json, 'sent', $execution.id) }));"
+      }
+    },
+    {
+      "id": "c56964b2-853a-ad63-6b49-f16aa0d609b1",
+      "position": [
+        2200,
+        540
+      ],
+      "name": "Failed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Shared helpers, inlined into every Code node by build.js (a Code node cannot import local files).\nfunction truncate(value, max) {\n  const s = String(value == null ? '' : value);\n  return s.length > max ? `${s.slice(0, Math.max(0, max - 1))}…` : s;\n}\n\n// Error text is stored and shown to people: never let a token, key or password ride along in it.\nfunction redact(text) {\n  // A key must stand alone (or be a known compound such as client_secret): an error CODE like INVALID_WEBHOOK_SECRET is not a secret.\n  const key = '(?<![A-Za-z0-9_])(?:api[_-]?key|x-api-key|client[_-]?secret|access[_-]?token|refresh[_-]?token|auth[_-]?token|private[_-]?key|token|secret|password|passwd|authorization|x-webhook-secret|x-commitmentos-key)';\n  return String(text == null ? '' : text)\n    .replace(/(bearer|basic)\\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [redacted]')\n    .replace(new RegExp(`(${key}[\"']?\\\\s*[:=]\\\\s*[\"']?)[^\\\\s\"',;]+`, 'gi'), '$1[redacted]')\n    .replace(/(AIza|sk-|xox[abp]-)[A-Za-z0-9_-]{10,}/g, '[redacted]');\n}\n\n// An HTTP error from n8n reads `503 - \"<response body>\"`. That body can echo the request (a validation error quotes its\n// `input`, which may be somebody's email), so keep the status and CommitmentOS's own structured fields only.\nfunction safeHttpMessage(message) {\n  const m = /^(\\d{3}) - ([\\s\\S]*)$/.exec(String(message));\n  if (!m) return String(message);\n  let body = m[2].trim();\n  for (let i = 0; i < 2 && typeof body === 'string'; i += 1) {\n    try { body = JSON.parse(body); } catch (e) { return `HTTP ${m[1]}`; }\n  }\n  if (!body || typeof body !== 'object') return `HTTP ${m[1]}`;\n  if (Array.isArray(body.detail)) {\n    const fields = body.detail.map((d) => (d && Array.isArray(d.loc) ? d.loc.filter((x) => typeof x === 'string').join('.') : null)).filter(Boolean);\n    return `HTTP ${m[1]}: the request was invalid (${[...new Set(fields)].slice(0, 6).join(', ') || 'no field named'})`;\n  }\n  const code = typeof body.code === 'string' ? body.code : typeof body.status === 'string' ? body.status : null;\n  const detail = typeof body.detail === 'string' ? body.detail : typeof body.error_message === 'string' ? body.error_message : null;\n  return [`HTTP ${m[1]}`, code, detail && truncate(detail, 200)].filter(Boolean).join(': ');\n}\n\n// n8n hands errors over as Error objects, {message}, {error:{message}} or plain strings\nfunction errorMessage(e) {\n  if (e == null) return 'unknown error';\n  if (typeof e === 'string') return safeHttpMessage(e);\n  const inner = e.error && typeof e.error === 'object' ? e.error : e;\n  const parts = [inner.message || inner.description || e.message, /^\\d{3}$/.test(String(inner.httpCode)) ? `HTTP ${inner.httpCode}` : null].filter(Boolean);\n  return parts.length ? safeHttpMessage(parts.join(' - ')) : JSON.stringify(inner).slice(0, 300);\n}\n\nconst isEmail = (s) => typeof s === 'string' && /^[^\\s@<>()]+@[^\\s@<>()]+\\.[^\\s@<>()]+$/.test(s.trim());\n// Notification Dispatcher: hand out claimed notifications, report each outcome, summarise the run.\n\nconst claimedItems = (claim) => (claim && Array.isArray(claim.items) ? claim.items : []);\n\n// one report per notification, built from the delivery outcome (an error item still carries the original notification)\nfunction deliveryReport(item, outcome, executionId) {\n  const base = { notification_id: item.id, n8n_execution_id: String(executionId) };\n  if (outcome === 'sent') return { event: 'notification.sent', ...base };\n  return { event: 'notification.failed', ...base, error: truncate(redact(errorMessage(item.error || item)), 900) };\n}\n\nfunction summariseDispatch(outcomes) {\n  const sent = outcomes.filter((o) => o.event === 'notification.sent').length;\n  const failed = outcomes.filter((o) => o.event === 'notification.failed');\n  return {\n    total: outcomes.length,\n    sent,\n    failed: failed.length,\n    errors: failed.slice(0, 5).map((o) => o.error),\n    status: failed.length === 0 ? 'SUCCESS' : sent === 0 ? 'FAILED' : 'PARTIAL',\n  };\n}\n\nif (typeof module !== 'undefined' && module.exports) module.exports = { claimedItems, deliveryReport, summariseDispatch };\n\n\nreturn $input.all().map((i, n) => ({ json: deliveryReport({ ...$('Split claimed').itemMatching(n).json, error: i.json.error }, 'failed', $execution.id) }));"
+      }
+    },
+    {
+      "id": "3f11c6b8-e211-8339-a3b5-a5f7de3c7c8d",
+      "position": [
+        2480,
+        370
+      ],
+      "name": "Report delivery",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/webhooks/n8n",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cosApiInbound0001",
+          "name": "CommitmentOS API (n8n -> API secret)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "bbff9e32-827b-6c53-63cd-fcabb6e8b00f",
+      "position": [
+        2760,
+        370
+      ],
+      "name": "Summarise",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Shared helpers, inlined into every Code node by build.js (a Code node cannot import local files).\nfunction truncate(value, max) {\n  const s = String(value == null ? '' : value);\n  return s.length > max ? `${s.slice(0, Math.max(0, max - 1))}…` : s;\n}\n\n// Error text is stored and shown to people: never let a token, key or password ride along in it.\nfunction redact(text) {\n  // A key must stand alone (or be a known compound such as client_secret): an error CODE like INVALID_WEBHOOK_SECRET is not a secret.\n  const key = '(?<![A-Za-z0-9_])(?:api[_-]?key|x-api-key|client[_-]?secret|access[_-]?token|refresh[_-]?token|auth[_-]?token|private[_-]?key|token|secret|password|passwd|authorization|x-webhook-secret|x-commitmentos-key)';\n  return String(text == null ? '' : text)\n    .replace(/(bearer|basic)\\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [redacted]')\n    .replace(new RegExp(`(${key}[\"']?\\\\s*[:=]\\\\s*[\"']?)[^\\\\s\"',;]+`, 'gi'), '$1[redacted]')\n    .replace(/(AIza|sk-|xox[abp]-)[A-Za-z0-9_-]{10,}/g, '[redacted]');\n}\n\n// An HTTP error from n8n reads `503 - \"<response body>\"`. That body can echo the request (a validation error quotes its\n// `input`, which may be somebody's email), so keep the status and CommitmentOS's own structured fields only.\nfunction safeHttpMessage(message) {\n  const m = /^(\\d{3}) - ([\\s\\S]*)$/.exec(String(message));\n  if (!m) return String(message);\n  let body = m[2].trim();\n  for (let i = 0; i < 2 && typeof body === 'string'; i += 1) {\n    try { body = JSON.parse(body); } catch (e) { return `HTTP ${m[1]}`; }\n  }\n  if (!body || typeof body !== 'object') return `HTTP ${m[1]}`;\n  if (Array.isArray(body.detail)) {\n    const fields = body.detail.map((d) => (d && Array.isArray(d.loc) ? d.loc.filter((x) => typeof x === 'string').join('.') : null)).filter(Boolean);\n    return `HTTP ${m[1]}: the request was invalid (${[...new Set(fields)].slice(0, 6).join(', ') || 'no field named'})`;\n  }\n  const code = typeof body.code === 'string' ? body.code : typeof body.status === 'string' ? body.status : null;\n  const detail = typeof body.detail === 'string' ? body.detail : typeof body.error_message === 'string' ? body.error_message : null;\n  return [`HTTP ${m[1]}`, code, detail && truncate(detail, 200)].filter(Boolean).join(': ');\n}\n\n// n8n hands errors over as Error objects, {message}, {error:{message}} or plain strings\nfunction errorMessage(e) {\n  if (e == null) return 'unknown error';\n  if (typeof e === 'string') return safeHttpMessage(e);\n  const inner = e.error && typeof e.error === 'object' ? e.error : e;\n  const parts = [inner.message || inner.description || e.message, /^\\d{3}$/.test(String(inner.httpCode)) ? `HTTP ${inner.httpCode}` : null].filter(Boolean);\n  return parts.length ? safeHttpMessage(parts.join(' - ')) : JSON.stringify(inner).slice(0, 300);\n}\n\nconst isEmail = (s) => typeof s === 'string' && /^[^\\s@<>()]+@[^\\s@<>()]+\\.[^\\s@<>()]+$/.test(s.trim());\n// Notification Dispatcher: hand out claimed notifications, report each outcome, summarise the run.\n\nconst claimedItems = (claim) => (claim && Array.isArray(claim.items) ? claim.items : []);\n\n// one report per notification, built from the delivery outcome (an error item still carries the original notification)\nfunction deliveryReport(item, outcome, executionId) {\n  const base = { notification_id: item.id, n8n_execution_id: String(executionId) };\n  if (outcome === 'sent') return { event: 'notification.sent', ...base };\n  return { event: 'notification.failed', ...base, error: truncate(redact(errorMessage(item.error || item)), 900) };\n}\n\nfunction summariseDispatch(outcomes) {\n  const sent = outcomes.filter((o) => o.event === 'notification.sent').length;\n  const failed = outcomes.filter((o) => o.event === 'notification.failed');\n  return {\n    total: outcomes.length,\n    sent,\n    failed: failed.length,\n    errors: failed.slice(0, 5).map((o) => o.error),\n    status: failed.length === 0 ? 'SUCCESS' : sent === 0 ? 'FAILED' : 'PARTIAL',\n  };\n}\n\nif (typeof module !== 'undefined' && module.exports) module.exports = { claimedItems, deliveryReport, summariseDispatch };\n\n\nreturn [{ json: summariseDispatch($input.all().map((i) => ({ event: i.json.event, error: null }))) }];"
+      }
+    },
+    {
+      "id": "5e5b9940-c809-4d4a-3902-35685d1ebfb5",
+      "position": [
+        3040,
+        370
+      ],
+      "name": "Report run",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/webhooks/n8n",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ event: 'run.finished', workflow_key: 'notification-dispatcher', n8n_execution_id: String($execution.id), n8n_workflow_id: $workflow.id, workflow_name: $workflow.name, trigger: $('Mark start').first().json._trigger, status: $json.status, result: { sent: $json.sent, failed: $json.failed, errors: $json.errors }, error: $json.failed ? $json.errors.join('; ') : null, duration_ms: Math.max(0, Date.now() - $('Mark start').first().json._t0) }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cosApiInbound0001",
+          "name": "CommitmentOS API (n8n -> API secret)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Every minute": {
+      "main": [
+        [
+          {
+            "node": "Mark start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run now (webhook)": {
+      "main": [
+        [
+          {
+            "node": "Mark start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Called by another workflow": {
+      "main": [
+        [
+          {
+            "node": "Mark start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark start": {
+      "main": [
+        [
+          {
+            "node": "Claim notifications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim notifications": {
+      "main": [
+        [
+          {
+            "node": "Split claimed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split claimed": {
+      "main": [
+        [
+          {
+            "node": "Anything to send?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anything to send?": {
+      "main": [
+        [
+          {
+            "node": "Channel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Nothing to send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Channel": {
+      "main": [
+        [
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Telegram": {
+      "main": [
+        [
+          {
+            "node": "Telegram really sent?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send email": {
+      "main": [
+        [
+          {
+            "node": "Sent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram really sent?": {
+      "main": [
+        [
+          {
+            "node": "Sent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sent": {
+      "main": [
+        [
+          {
+            "node": "Report delivery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Failed": {
+      "main": [
+        [
+          {
+            "node": "Report delivery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Report delivery": {
+      "main": [
+        [
+          {
+            "node": "Summarise",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarise": {
+      "main": [
+        [
+          {
+            "node": "Report run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveExecutionProgress": false,
+    "errorWorkflow": "cosWfErrorHandler01"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "builtFrom": "automation/n8n/build.js",
+    "description": "Delivers queued notifications."
+  },
+  "versionId": "764171db-6da7-f7bb-15b9-8294fb07c93c"
+}

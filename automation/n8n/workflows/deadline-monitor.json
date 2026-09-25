@@ -1,0 +1,395 @@
+{
+  "id": "cosWfMonitor000001",
+  "name": "Deadline Monitor",
+  "active": true,
+  "nodes": [
+    {
+      "id": "c22ea7c6-22e4-3602-151b-bf2a5d6e52e3",
+      "position": [
+        240,
+        200
+      ],
+      "name": "Every 5 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "a48bafda-e5c6-a206-3bcc-a9834e167770",
+      "position": [
+        240,
+        540
+      ],
+      "name": "Run now (webhook)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "commitmentos-monitor",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cosWebhookAuth0002",
+          "name": "CommitmentOS webhooks (API -> n8n secret)"
+        }
+      },
+      "webhookId": "fa2b6b52-a161-165f-5351-b15b186a9c07"
+    },
+    {
+      "id": "11859f96-7d1a-01aa-2f8f-2bcc53bf2dca",
+      "position": [
+        520,
+        370
+      ],
+      "name": "Mark start",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const first = $input.first()?.json ?? {};\nconst trigger = 'headers' in first && 'body' in first ? 'WEBHOOK' : 'timestamp' in first ? 'SCHEDULE' : 'SUBWORKFLOW';\nreturn $input.all().map((i) => ({ json: { ...i.json, _t0: Date.now(), _trigger: trigger } }));"
+      },
+      "notes": "Remembers when this run began and what started it (for the run duration and trigger).",
+      "notesInFlow": true
+    },
+    {
+      "id": "1f7fd4b7-bf97-7399-b608-7dc09295e579",
+      "position": [
+        800,
+        370
+      ],
+      "name": "Evaluate deadlines",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/internal/monitor/tick",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({}) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cosApiInbound0001",
+          "name": "CommitmentOS API (n8n -> API secret)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "9e021033-ba92-8d35-c4d4-fb193373ae91",
+      "position": [
+        1080,
+        370
+      ],
+      "name": "Assess tick",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Shared helpers, inlined into every Code node by build.js (a Code node cannot import local files).\nfunction truncate(value, max) {\n  const s = String(value == null ? '' : value);\n  return s.length > max ? `${s.slice(0, Math.max(0, max - 1))}…` : s;\n}\n\n// Error text is stored and shown to people: never let a token, key or password ride along in it.\nfunction redact(text) {\n  // A key must stand alone (or be a known compound such as client_secret): an error CODE like INVALID_WEBHOOK_SECRET is not a secret.\n  const key = '(?<![A-Za-z0-9_])(?:api[_-]?key|x-api-key|client[_-]?secret|access[_-]?token|refresh[_-]?token|auth[_-]?token|private[_-]?key|token|secret|password|passwd|authorization|x-webhook-secret|x-commitmentos-key)';\n  return String(text == null ? '' : text)\n    .replace(/(bearer|basic)\\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [redacted]')\n    .replace(new RegExp(`(${key}[\"']?\\\\s*[:=]\\\\s*[\"']?)[^\\\\s\"',;]+`, 'gi'), '$1[redacted]')\n    .replace(/(AIza|sk-|xox[abp]-)[A-Za-z0-9_-]{10,}/g, '[redacted]');\n}\n\n// An HTTP error from n8n reads `503 - \"<response body>\"`. That body can echo the request (a validation error quotes its\n// `input`, which may be somebody's email), so keep the status and CommitmentOS's own structured fields only.\nfunction safeHttpMessage(message) {\n  const m = /^(\\d{3}) - ([\\s\\S]*)$/.exec(String(message));\n  if (!m) return String(message);\n  let body = m[2].trim();\n  for (let i = 0; i < 2 && typeof body === 'string'; i += 1) {\n    try { body = JSON.parse(body); } catch (e) { return `HTTP ${m[1]}`; }\n  }\n  if (!body || typeof body !== 'object') return `HTTP ${m[1]}`;\n  if (Array.isArray(body.detail)) {\n    const fields = body.detail.map((d) => (d && Array.isArray(d.loc) ? d.loc.filter((x) => typeof x === 'string').join('.') : null)).filter(Boolean);\n    return `HTTP ${m[1]}: the request was invalid (${[...new Set(fields)].slice(0, 6).join(', ') || 'no field named'})`;\n  }\n  const code = typeof body.code === 'string' ? body.code : typeof body.status === 'string' ? body.status : null;\n  const detail = typeof body.detail === 'string' ? body.detail : typeof body.error_message === 'string' ? body.error_message : null;\n  return [`HTTP ${m[1]}`, code, detail && truncate(detail, 200)].filter(Boolean).join(': ');\n}\n\n// n8n hands errors over as Error objects, {message}, {error:{message}} or plain strings\nfunction errorMessage(e) {\n  if (e == null) return 'unknown error';\n  if (typeof e === 'string') return safeHttpMessage(e);\n  const inner = e.error && typeof e.error === 'object' ? e.error : e;\n  const parts = [inner.message || inner.description || e.message, /^\\d{3}$/.test(String(inner.httpCode)) ? `HTTP ${inner.httpCode}` : null].filter(Boolean);\n  return parts.length ? safeHttpMessage(parts.join(' - ')) : JSON.stringify(inner).slice(0, 300);\n}\n\nconst isEmail = (s) => typeof s === 'string' && /^[^\\s@<>()]+@[^\\s@<>()]+\\.[^\\s@<>()]+$/.test(s.trim());\n// Deadline Monitor: decide whether a tick did anything worth recording or delivering.\n// (The deadline rules themselves - which reminder is due, overdue, escalation - live in the API, not here.)\n\nfunction assessTick(tick) {\n  const n = (k) => Number((tick && tick[k]) || 0);\n  const errors = Array.isArray(tick && tick.errors) ? tick.errors : [];\n  const notifying = n('reminders_queued') + n('marked_overdue') + n('escalated') + n('review_nudges');\n  const didWork = notifying + n('approvals_expired') + n('stale_detected_swept') + n('notifications_suppressed') + errors.length > 0;\n  return {\n    did_work: didWork,\n    deliver: notifying > 0,\n    status: errors.length ? 'PARTIAL' : 'SUCCESS',\n    error: errors.length ? truncate(redact(errors.slice(0, 3).join('; ')), 900) : null,\n    result: {\n      evaluated: n('evaluated'), reminders_queued: n('reminders_queued'), marked_overdue: n('marked_overdue'), escalated: n('escalated'),\n      review_nudges: n('review_nudges'), approvals_expired: n('approvals_expired'), suppressed: n('notifications_suppressed'), errors: errors.length,\n    },\n  };\n}\n\nif (typeof module !== 'undefined' && module.exports) module.exports = { assessTick };\n\n\nreturn [{ json: assessTick($input.first().json) }];"
+      }
+    },
+    {
+      "id": "e98a97ea-d5df-31f4-6b1f-feaef16d706a",
+      "position": [
+        1360,
+        370
+      ],
+      "name": "Did anything happen?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "71c251e6-580c-07f7-4b5e-9379832cefe9",
+              "leftValue": "={{ $json.did_work }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "682c7b60-73de-740b-da04-a6f94214c725",
+      "position": [
+        1640,
+        710
+      ],
+      "name": "Nothing due",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return [{ json: { idle: true, n8n_execution_id: String($execution.id) } }];"
+      }
+    },
+    {
+      "id": "6dbac161-1706-99a2-979c-a3d236380687",
+      "position": [
+        1640,
+        200
+      ],
+      "name": "Report run",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/webhooks/n8n",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ event: 'run.finished', workflow_key: 'deadline-monitor', n8n_execution_id: String($execution.id), n8n_workflow_id: $workflow.id, workflow_name: $workflow.name, trigger: $('Mark start').first().json._trigger, status: $json.status, result: $json.result, error: $json.error, duration_ms: Math.max(0, Date.now() - $('Mark start').first().json._t0) }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cosApiInbound0001",
+          "name": "CommitmentOS API (n8n -> API secret)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "4567f093-fe11-1819-f694-984cc261cef5",
+      "position": [
+        1920,
+        200
+      ],
+      "name": "Reminders to deliver?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "91905eca-5e92-23d6-e823-17aeb8d9a837",
+              "leftValue": "={{ $('Assess tick').first().json.deliver }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "847805dc-c86b-8cd8-c8a5-8ecfae8fcf7e",
+      "position": [
+        2200,
+        30
+      ],
+      "name": "Deliver notifications",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "cosWfDispatch00001",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "0798c879-3f91-0fcf-d8ea-b3b92e18790e",
+      "position": [
+        2480,
+        200
+      ],
+      "name": "Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return [{ json: { ...$('Assess tick').first().json, n8n_execution_id: String($execution.id) } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Every 5 minutes": {
+      "main": [
+        [
+          {
+            "node": "Mark start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run now (webhook)": {
+      "main": [
+        [
+          {
+            "node": "Mark start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark start": {
+      "main": [
+        [
+          {
+            "node": "Evaluate deadlines",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate deadlines": {
+      "main": [
+        [
+          {
+            "node": "Assess tick",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assess tick": {
+      "main": [
+        [
+          {
+            "node": "Did anything happen?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Did anything happen?": {
+      "main": [
+        [
+          {
+            "node": "Report run",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Nothing due",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Report run": {
+      "main": [
+        [
+          {
+            "node": "Reminders to deliver?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reminders to deliver?": {
+      "main": [
+        [
+          {
+            "node": "Deliver notifications",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deliver notifications": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveExecutionProgress": false,
+    "errorWorkflow": "cosWfErrorHandler01"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "builtFrom": "automation/n8n/build.js",
+    "description": "Evaluates deadlines on a schedule."
+  },
+  "versionId": "c1a9c4af-945c-4aec-4ae1-61a5b7f6125f"
+}
