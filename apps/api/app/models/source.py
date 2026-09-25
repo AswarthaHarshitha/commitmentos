@@ -47,7 +47,6 @@ class Source(TimestampMixin, Base):
     disposition: Mapped[SourceDisposition] = mapped_column(enum_col(SourceDisposition, "source_disposition"))
     role: Mapped[str] = mapped_column(String(16), default="PRIMARY", server_default="PRIMARY")
     extraction: Mapped[dict[str, Any] | None] = mapped_column(default=None)
-    is_synthetic: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
 
     obligation: Mapped[Obligation | None] = relationship(Obligation, back_populates="sources")
 

@@ -49,7 +49,7 @@ def new_uuid() -> uuid.UUID:
 
 
 class TimestampMixin:
-    # Python-side defaults use the injectable clock so demo/test time is coherent;
+    # Python-side defaults use the injectable clock so test time is coherent;
     # server_default is only a safety net for raw SQL inserts.
     created_at: Mapped[datetime] = mapped_column(default=utcnow, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow, server_default=func.now())

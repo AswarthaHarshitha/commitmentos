@@ -131,18 +131,46 @@ def _excerpt(message: MessageEnvelope, analysis: Analysis, body: str) -> str:
 
 
 def _join(*parts: str | None) -> str | None:
+    """Reasons from several sources as one sentence-like line: no doubled punctuation, no repeats, each starting with a capital."""
     seen: list[str] = []
     for p in parts:
-        if p and p.strip() and p.strip() not in seen:
-            seen.append(p.strip())
+        text = (p or "").strip().rstrip(".;, ").strip()
+        text = text[:1].upper() + text[1:]
+        if text and text.lower() not in (s.lower() for s in seen):
+            seen.append(text)
     return "; ".join(seen) or None
+
+
+def _origin_address(hinted: str | None, message: MessageEnvelope, user: User) -> str | None:
+    """The address a follow-up about this commitment will go to: the one on the message itself, not one read out of its text.
+
+    A message someone sent to the person: whoever sent it. A message the person sent: the one recipient it went to (if there
+    were several, the one the model named - but only if it really is among them). Otherwise nobody, and the person is asked."""
+    own = user.email.lower()
+    if message.direction == "INBOUND":
+        sender = (message.sender_email or "").lower()
+        return sender if sender and sender != own else None
+    others = [r.lower() for r in message.recipients if r.lower() != own]
+    named = (hinted or "").lower()
+    if named in others:
+        return named
+    return others[0] if len(others) == 1 else None
+
+
+def _origin_name(hinted_name: str | None, hinted_email: str | None, origin: str | None, message: MessageEnvelope) -> str | None:
+    """A name is only attached to an address when they are known to belong together."""
+    if origin is None:
+        return hinted_name  # nobody to write to, but "waiting on Marcus" is still worth showing
+    if message.direction == "INBOUND" and origin == (message.sender_email or "").lower():
+        return message.sender_name or (hinted_name if (hinted_email or "").lower() == origin else None)
+    return hinted_name if (hinted_email or "").lower() == origin else None
 
 
 def _obligation_fields(analysis: Analysis, message: MessageEnvelope, user: User, settings: Settings, status: S) -> dict[str, Any]:
     ext, res = analysis.extraction, analysis.resolution
     tz = get_zone(user.timezone, settings.default_timezone)
-    counterparty_email = ext.counterparty_email or (message.sender_email if ext.owner == "SELF" and message.direction == "INBOUND" else None)
-    counterparty_name = ext.counterparty_name or (message.sender_name if counterparty_email == message.sender_email else None)
+    counterparty_email = _origin_address(ext.counterparty_email, message, user)
+    counterparty_name = _origin_name(ext.counterparty_name, ext.counterparty_email, counterparty_email, message)
     owner = "me" if ext.owner == "SELF" else (ext.counterparty_name or ext.counterparty_email or "someone else")
     reasons = analysis.decision.reasons if analysis.decision.action == "REVIEW" else []
     return {
@@ -210,7 +238,6 @@ def handle_extracted_message(db: Session, ev: MessageExtracted, now: datetime, s
     common = dict(
         user_id=user.id, source_type=message.source_type, external_id=message.external_id, thread_id=message.thread_id,
         rfc_message_id=message.rfc_message_id, received_at=message.received_at or now, content_hash=content_hash,
-        is_synthetic=message.is_synthetic or message.source_type == SourceType.DEMO,
     )
 
     # ---- extraction failed upstream (LLM down / refused / invalid output): record it visibly ----
@@ -218,7 +245,7 @@ def handle_extracted_message(db: Session, ev: MessageExtracted, now: datetime, s
         return _record_failure(db, user, message, existing, common, ev.extraction_status, ev.extraction_error, now, settings, run_id, actor_n8n)
 
     try:
-        validated = validate_extraction(ev.extraction, f"{subject}\n{body}", settings, sender_email=message.sender_email)
+        validated = validate_extraction(ev.extraction, f"{subject}\n{body}", settings, sender_email=message.sender_email, known_addresses=message.recipients)
     except InvalidOutput as exc:
         return _record_failure(db, user, message, existing, common, "INVALID_OUTPUT", "; ".join(exc.reasons)[:400], now, settings, run_id, actor_n8n)
     if ev.analysis:
@@ -246,11 +273,11 @@ def handle_extracted_message(db: Session, ev: MessageExtracted, now: datetime, s
                     "obligation_id": str(winner.obligation_id) if winner and winner.obligation_id else None}
 
     audit.record(db, AuditEventType.MESSAGE_RECEIVED, "Message received and analysed", user_id=user.id, actor=actor_n8n, source_id=source.id, run_id=run_id,
-                 data={"source": message.source_type, "synthetic": source.is_synthetic}, now=now)
+                 data={"source": message.source_type}, now=now)
     audit.record(
         db, AuditEventType.AI_CLASSIFIED,
         f"Classified as {ext.obligation_type.value.replace('_', ' ').lower()} with {ext.confidence:.0%} confidence" if ext.is_obligation
-        else f"Not an obligation ({ext.confidence:.0%} sure)",
+        else f"Not a commitment ({ext.confidence:.0%} sure)",
         user_id=user.id, actor=Actor.ai(_model_info(ev)["model"]), source_id=source.id, run_id=run_id,
         data={**_model_info(ev), "is_obligation": ext.is_obligation, "confidence": ext.confidence, "confidence_raw": validated.confidence_raw,
               "confidence_notes": validated.confidence_notes, "warnings": validated.warnings, "decision": decision.as_dict()},
@@ -263,7 +290,7 @@ def handle_extracted_message(db: Session, ev: MessageExtracted, now: datetime, s
         source.disposition = SourceDisposition.NOT_OBLIGATION
         source.subject = source.excerpt = source.sender_email = source.sender_name = None
         source.extraction = None
-        audit.record(db, AuditEventType.NOT_AN_OBLIGATION, "No obligation found in this message", user_id=user.id, actor=Actor.system("ingestion"),
+        audit.record(db, AuditEventType.NOT_AN_OBLIGATION, "No commitment found in this message", user_id=user.id, actor=Actor.system("ingestion"),
                      source_id=source.id, run_id=run_id, data={"confidence": ext.confidence}, now=now)
         db.flush()
         return {"disposition": "NOT_OBLIGATION", "source_id": str(source.id), "decision": decision.as_dict()}
@@ -288,7 +315,7 @@ def handle_extracted_message(db: Session, ev: MessageExtracted, now: datetime, s
         )
         db.add(candidate)
         db.flush()
-        audit.record(db, AuditEventType.CANDIDATE_STORED, "Low-confidence detection stored as a candidate (no obligation created)", user_id=user.id,
+        audit.record(db, AuditEventType.CANDIDATE_STORED, "Low-confidence detection stored as a candidate (no commitment created)", user_id=user.id,
                      actor=Actor.system("ingestion"), source_id=source.id, run_id=run_id, data={"candidate_id": candidate.id, "confidence": ext.confidence, "reasons": decision.reasons}, now=now)
         return {"disposition": "CANDIDATE", "candidate_id": str(candidate.id), "source_id": str(source.id), "decision": decision.as_dict()}
 
@@ -304,7 +331,7 @@ def handle_extracted_message(db: Session, ev: MessageExtracted, now: datetime, s
     audit.record(db, AuditEventType.COMMITMENT_DETECTED, "Commitment detected in the message", user_id=user.id, obligation_id=ob.id, actor=Actor.ai(_model_info(ev)["model"]),
                  source_id=source.id, run_id=run_id,
                  data={"due_at": ob.due_at, "precision": ob.due_precision, "ambiguous": analysis.resolution.ambiguous, "deadline_method": analysis.resolution.method}, now=now)
-    audit.record(db, AuditEventType.OBLIGATION_CREATED, f"Obligation created ({status.value.replace('_', ' ').lower()})", user_id=user.id, obligation_id=ob.id,
+    audit.record(db, AuditEventType.OBLIGATION_CREATED, "Commitment created and now tracked" if status == S.OPEN else "Commitment created, waiting for your review", user_id=user.id, obligation_id=ob.id,
                  actor=Actor.system("ingestion"), source_id=source.id, run_id=run_id,
                  data={"decision": decision.action, "reasons": decision.reasons, "confidence": ob.confidence,
                        "thresholds": {"high": settings.confidence_high, "medium": settings.confidence_medium}}, now=now)
@@ -319,7 +346,7 @@ def handle_extracted_message(db: Session, ev: MessageExtracted, now: datetime, s
     created = notifications.queue(db, user=user, ob=ob, kind=kind, rung_key="CREATED", content=content, policy=policy, now=now,
                                   external=should_notify_externally(ob, now), run_id=run_id)
     if created:
-        audit.record(db, AuditEventType.NOTIFICATION_QUEUED, f"{'User notified' if status == S.OPEN else 'Review requested'} ({', '.join(n.channel.value.lower() for n in created)})",
+        audit.record(db, AuditEventType.NOTIFICATION_QUEUED, f"{'You were notified' if status == S.OPEN else 'Review requested'} ({messages.channels_phrase([n.channel.value for n in created])})",
                      user_id=user.id, obligation_id=ob.id, actor=Actor.system("notifier"), run_id=run_id,
                      data={"channels": [n.channel for n in created], "kind": kind, "external": should_notify_externally(ob, now)}, now=now)
     return {

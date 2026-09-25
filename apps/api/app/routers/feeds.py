@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, Query
@@ -12,7 +12,6 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app import __version__
-from app.clock import clock
 from app.config import Settings, get_settings
 from app.db import get_db
 from app.deps import get_current_user, get_now
@@ -173,9 +172,7 @@ def system_status(
 ) -> SystemStatus:
     return SystemStatus(
         now=now,
-        real_now=datetime.now(UTC),
-        clock_offset_seconds=int(clock.offset.total_seconds()),
-        demo_mode=settings.demo_mode,
+        email_delivery="local_test_inbox" if settings.mail_goes_to_local_sink else "smtp",
         llm_provider=settings.llm_provider,
         llm_model=None if isinstance(llm, NotConfiguredClient) else llm.model,
         llm_configured=not isinstance(llm, NotConfiguredClient),  # the client the extractor will actually use, whatever the provider

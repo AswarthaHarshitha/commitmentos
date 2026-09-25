@@ -58,7 +58,7 @@ class AutomationRun(Base):
 
 
 class SystemSetting(Base):
-    """Tiny key/value table (currently only the demo clock offset)."""
+    """Tiny key/value table (currently only the test clock offset)."""
 
     __tablename__ = "system_settings"
 

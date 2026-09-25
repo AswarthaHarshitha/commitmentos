@@ -31,6 +31,7 @@ from app.schemas.misc import TimelineEntry
 from app.schemas.obligation import SuggestedAction
 from app.services.messages import fmt_span, fmt_when
 from app.services.reminders import build_ladder, policy_for
+from app.services.timeutil import get_zone
 
 _LABELS = {
     NotificationKind.REMINDER: "Reminder",
@@ -46,6 +47,7 @@ def suggest_next_action(
     *,
     has_calendar_event: bool,
     open_follow_up: bool,
+    follow_up_to: str | None = None,
 ) -> SuggestedAction:
     base = f"/api/obligations/{ob.id}"
     if ob.status in (S.DETECTED, S.NEEDS_REVIEW):
@@ -60,13 +62,13 @@ def suggest_next_action(
             reason="The deadline has passed. If it is done, mark it complete; if the deadline changed, edit it.",
             endpoint=f"{base}/complete",
         )
-    if ob.requires_confirmation and ob.counterparty_email and not open_follow_up:
+    if ob.requires_confirmation and (follow_up_to or ob.counterparty_email) and not open_follow_up:
         return SuggestedAction(
             code="CONFIRM_WITH_SENDER",
             label="Reply to confirm",
             reason=(
                 "A confirmation is expected from you. CommitmentOS can draft a reply to "
-                f"{ob.counterparty_name or ob.counterparty_email} for your approval."
+                f"{ob.counterparty_name or follow_up_to or ob.counterparty_email} for your approval."
             ),
             endpoint=f"{base}/follow-up",
         )
@@ -176,18 +178,23 @@ def _deadline_explanation(ob: Obligation, resolution: dict[str, Any], tz_name: s
     if method == "RECURRENCE":
         return "Calculated from the recurring schedule."
     text = ob.due_text
-    ref = resolution.get("reference_time")
-    parts = []
-    if text:
+    zone = resolution.get("timezone", tz_name)
+    parts: list[str] = []
+    detail = resolution.get("explanation")  # already quotes the message's own words ('Read "..." as ...')
+    if detail is None and text:
         parts.append(f"The message said \"{text}\".")
+    ref = resolution.get("reference_time")
     if ref:
-        parts.append(f"That was read relative to when the message was received ({ref}) in {resolution.get('timezone', tz_name)}.")
-    detail = resolution.get("explanation")
+        try:
+            received = fmt_when(datetime.fromisoformat(ref), None, get_zone(zone))
+        except (ValueError, KeyError):
+            received = None
+        if received:
+            parts.append(f"Relative words were read from when the message arrived ({received}).")
     if detail:
         parts.append(detail)
-    for warning in resolution.get("warnings", []):
-        parts.append(warning)
-    return " ".join(parts) or None
+    parts.extend(resolution.get("warnings", []))
+    return " ".join(p if p.endswith((".", "!", "?")) else f"{p}." for p in parts) or None
 
 
 def open_follow_up(db: Session, ob: Obligation) -> bool:

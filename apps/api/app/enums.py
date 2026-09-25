@@ -44,7 +44,7 @@ class SourceType(StrEnum):
     GOOGLE_CALENDAR = "GOOGLE_CALENDAR"
     WEBHOOK = "WEBHOOK"
     MANUAL = "MANUAL"
-    DEMO = "DEMO"  # clearly-labelled synthetic messages
+    IMPORTED = "IMPORTED"  # an email a person pasted in themselves
 
 
 class SourceDisposition(StrEnum):
@@ -149,7 +149,6 @@ class AuditEventType(StrEnum):
     FOLLOW_UP_DRAFTED = "FOLLOW_UP_DRAFTED"
     AUTOMATION_RUN = "AUTOMATION_RUN"
     SECURITY = "SECURITY"
-    DEMO = "DEMO"
 
 
 class RunStatus(StrEnum):

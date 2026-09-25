@@ -181,7 +181,7 @@ def test_proposal_event_creates_a_pending_approval_only(client, n8n_headers, db)
 
 def test_approval_execution_report_over_the_wire(client, n8n_headers, db):
     user = make_user(db)
-    ob = make_obligation(db, user, due_at=NOW + timedelta(days=1))
+    ob = make_obligation(db, user, due_at=NOW + timedelta(days=1), counterparty_email="hr@example.org")
     a, _ = approvals.propose(db, user=user, ob=ob, action="SEND_FOLLOW_UP", title="Send follow-up", proposed_by="SYSTEM",
                              payload={"to": "hr@example.org", "subject": "s", "body": "b"}, rationale=None, now=NOW, settings=settings)
     approvals.approve(db, user, a, NOW, settings)
@@ -221,7 +221,7 @@ def test_claim_endpoint_validates_its_input(client, n8n_headers):
 
 def test_approval_push_path_claims_atomically_so_a_duplicate_trigger_is_harmless(client, n8n_headers, db):
     user = make_user(db)
-    ob = make_obligation(db, user, due_at=NOW + timedelta(days=1))
+    ob = make_obligation(db, user, due_at=NOW + timedelta(days=1), counterparty_email="hr@example.org")
     a, _ = approvals.propose(db, user=user, ob=ob, action="SEND_FOLLOW_UP", title="Send follow-up", proposed_by="SYSTEM",
                              payload={"to": "hr@example.org", "subject": "s", "body": "b"}, rationale=None, now=NOW, settings=settings)
     approvals.approve(db, user, a, NOW, settings)
@@ -235,7 +235,7 @@ def test_approval_push_path_claims_atomically_so_a_duplicate_trigger_is_harmless
 
 def test_pending_approvals_are_never_handed_to_n8n_by_either_path(client, n8n_headers, db):
     user = make_user(db)
-    ob = make_obligation(db, user, due_at=NOW + timedelta(days=1))
+    ob = make_obligation(db, user, due_at=NOW + timedelta(days=1), counterparty_email="hr@example.org")
     a, _ = approvals.propose(db, user=user, ob=ob, action="SEND_FOLLOW_UP", title="t", proposed_by="AI",
                              payload={"to": "hr@example.org", "subject": "s", "body": "b"}, rationale=None, now=NOW, settings=settings)
     db.commit()

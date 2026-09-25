@@ -25,5 +25,5 @@ USER appuser
 EXPOSE 8000
 
 # Migrations run on boot; uvicorn stays single-process (the in-memory rate limiter and the
-# demo clock are per-process by design, see docs/architecture.md).
+# test clock are per-process by design, see docs/architecture.md).
 CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"]

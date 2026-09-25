@@ -76,7 +76,6 @@ class ApprovalPatch(BaseModel):
 
     subject: str | None = Field(default=None, min_length=1, max_length=300)
     body: str | None = Field(default=None, min_length=1, max_length=8000)
-    to: str | None = Field(default=None, max_length=320)
     start_at: dt.datetime | None = None
     end_at: dt.datetime | None = None
 

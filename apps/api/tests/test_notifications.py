@@ -125,7 +125,7 @@ def test_a_delivery_that_finishes_after_cancellation_is_recorded_honestly(db):
     notifications.mark_sent(db, note, NOW)
     db.commit()
     ev = db.scalar(select(AuditEvent).where(AuditEvent.event_type == AuditEventType.NOTIFICATION_SENT))
-    assert "just after the obligation was closed" in ev.message
+    assert "just after the commitment was closed" in ev.message
 
 
 def test_lease_expiring_too_many_times_gives_up_instead_of_looping_forever(db):

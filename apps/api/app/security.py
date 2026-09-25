@@ -49,7 +49,7 @@ def _secret(settings: Settings) -> str:
 
 def create_access_token(user_id: uuid.UUID, token_version: int, settings: Settings | None = None) -> tuple[str, datetime]:
     """Session tokens are security, not business logic: they use the REAL clock, never the
-    (demo-adjustable) app clock, so time-travelling in demo mode cannot expire or pre-date a session."""
+    (test-adjustable) app clock, so time-travelling in the test stack cannot expire or pre-date a session."""
     settings = settings or get_settings()
     now = datetime.now(UTC)
     expires = now + timedelta(minutes=settings.jwt_ttl_minutes)
@@ -113,7 +113,7 @@ def decode_action_token(token: str, now: datetime | None = None, settings: Setti
             algorithms=[_ALGORITHM],
             issuer=_ISSUER,
             # exp/iat are checked by hand below, against the *app* clock: these links are minted and
-            # judged on the same (demo-adjustable) business timeline as the reminders that carry them.
+            # judged on the same (test-adjustable) business timeline as the reminders that carry them.
             options={"require": ["exp", "iat", "sub", "iss", "typ", "act", "oid"], "verify_exp": False, "verify_iat": False},
         )
     except jwt.PyJWTError as exc:

@@ -88,7 +88,7 @@ def test_creation_is_audited_and_scheduled_for_monitoring(alice, db):
     row = db.get(Obligation, uuid.UUID(ob["id"]))
     assert row.next_action_at == row.due_at - timedelta(hours=24)
     ev = db.scalar(select(AuditEvent).where(AuditEvent.obligation_id == row.id))
-    assert ev.message == "Obligation created manually" and ev.actor_type.value == "USER"
+    assert ev.message == "Commitment added by you" and ev.actor_type.value == "USER"
 
 
 def test_list_filters_search_sort_and_pagination(alice, db):

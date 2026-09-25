@@ -181,6 +181,14 @@ def test_an_invented_counterparty_email_is_dropped_but_the_senders_own_is_accept
     assert validate(make_extraction(counterparty_email="Onboarding@Example.org"), message=body_with_email).data.counterparty_email == "onboarding@example.org"
 
 
+def test_an_address_from_the_messages_own_headers_is_accepted_but_an_unrelated_one_is_not():
+    """Recipients of a message the person sent are header data, not part of the text a model reads."""
+    v = validate(make_extraction(counterparty_email="Marcus@Example.org"), known_addresses=["marcus@example.org", "other@example.org"])
+    assert v.data.counterparty_email == "marcus@example.org"
+    v = validate(make_extraction(counterparty_email="ceo@evil.example.net"), known_addresses=["marcus@example.org"])
+    assert v.data.counterparty_email is None and any("counterparty email" in w for w in v.warnings)
+
+
 def test_hallucinated_entities_are_dropped():
     v = validate(make_extraction(entities=[{"type": "org", "value": "University HR"}, {"type": "org", "value": "Acme Offshore Holdings"}]))
     assert [e.value for e in v.data.entities] == ["University HR"]

@@ -58,7 +58,8 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      DEMO_MODE: ${DEMO_MODE:-false}
+      # only the isolated end-to-end stack turns this on (scripts/e2e-stack.sh); it must never run next to real data
+      TEST_CLOCK: ${TEST_CLOCK:-false}
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:3000}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-commitmentos}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-commitmentos}
       JWT_SECRET: ${JWT_SECRET:?run ./scripts/init-env.sh first}
@@ -88,6 +89,7 @@ services:
       BUSINESS_DAY_END: ${BUSINESS_DAY_END:-17:00}
       DEFAULT_DATE_ORDER: ${DEFAULT_DATE_ORDER:-MDY}
       NOTIFY_FROM_EMAIL: ${NOTIFY_FROM_EMAIL:-commitmentos@localhost}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
       CALENDAR_PROVIDER: ${CALENDAR_PROVIDER:-local}
       RATE_LIMIT_LOGIN_PER_MINUTE: ${RATE_LIMIT_LOGIN_PER_MINUTE:-10}
       RATE_LIMIT_REGISTER_PER_HOUR: ${RATE_LIMIT_REGISTER_PER_HOUR:-10}
@@ -141,9 +143,9 @@ services:
       N8N_PROTOCOL: http
       N8N_WEBHOOK_URL: http://localhost:${N8N_PORT:-5678}/
       N8N_SECURE_COOKIE: "false"
-      # n8n keeps each execution's data (which includes message text) so runs can be inspected and retried. Keep it short,
-      # and for a real mailbox set N8N_SAVE_SUCCESS_EXECUTIONS=none so that successful runs leave no message content behind.
-      EXECUTIONS_DATA_SAVE_ON_SUCCESS: ${N8N_SAVE_SUCCESS_EXECUTIONS:-all}
+      # n8n keeps an execution's data (which includes message text) so a failed run can be inspected and retried. Successful runs
+      # keep nothing by default: the outcome is recorded in CommitmentOS's own automation history, without the message body.
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: ${N8N_SAVE_SUCCESS_EXECUTIONS:-none}
       EXECUTIONS_DATA_SAVE_ON_ERROR: all
       EXECUTIONS_DATA_SAVE_ON_PROGRESS: "false"
       EXECUTIONS_DATA_PRUNE: "true"

@@ -105,7 +105,7 @@ def _on_notification(db: Session, ev: NotificationReport, now: datetime, setting
         raise NotFoundError("Notification not found")
     run_id = _run_id(db, ev.n8n_execution_id)
     if ev.event == "notification.sent":
-        notifications.mark_sent(db, note, now, run_id)
+        notifications.mark_sent(db, note, now, run_id, settings)
     else:
         notifications.mark_failed(db, note, ev.error or "delivery failed", now, settings, run_id)
     return {"status": note.status.value}

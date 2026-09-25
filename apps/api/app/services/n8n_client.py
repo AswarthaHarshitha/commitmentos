@@ -58,13 +58,16 @@ class N8nClient:
             max_attempts=s.n8n_max_attempts,
         )
 
-    def trigger(self, path: str, payload: dict[str, Any]) -> TriggerResult:
+    def trigger(self, path: str, payload: dict[str, Any], *, timeout: float | None = None, attempts: int | None = None) -> TriggerResult:
+        """`timeout` / `attempts` override the defaults for one call - a workflow that answers only when it has finished (the
+        detection workflow, which waits for the language model) needs a long timeout and must not be retried while it is still running."""
         url = f"{self._base}/webhook/{path.lstrip('/')}"
         last_error = "unknown error"
         last_status: int | None = None
-        for attempt in range(1, self._max_attempts + 1):
+        max_attempts = self._max_attempts if attempts is None else max(1, attempts)
+        for attempt in range(1, max_attempts + 1):
             try:
-                with httpx.Client(timeout=self._timeout, transport=self._transport) as client:
+                with httpx.Client(timeout=timeout or self._timeout, transport=self._transport) as client:
                     response = client.post(url, json=payload, headers={SECRET_HEADER: self._secret})
                 last_status = response.status_code
                 if response.is_success:
@@ -74,7 +77,7 @@ class N8nClient:
                     break  # a 4xx will not fix itself; do not hammer
             except httpx.HTTPError as exc:
                 last_error = f"{type(exc).__name__}: n8n unreachable"
-            if attempt < self._max_attempts:
+            if attempt < max_attempts:
                 time.sleep(self._backoff * (2 ** (attempt - 1)))
         log.warning("n8n trigger %s failed after %d attempt(s): %s", path, attempt, last_error)
         return TriggerResult(False, last_status, last_error, attempt)

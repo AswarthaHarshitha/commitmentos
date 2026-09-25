@@ -76,7 +76,7 @@ def get_owned(db: Session, user: User, obligation_id: uuid.UUID, *, lock: bool =
         stmt = stmt.with_for_update()
     ob = db.scalar(stmt)
     if ob is None:
-        raise NotFoundError("Obligation not found")
+        raise NotFoundError("Commitment not found")
     return ob
 
 
@@ -135,7 +135,7 @@ def create_manual(db: Session, user: User, data: ObligationCreate, now: datetime
     audit.record(
         db,
         AuditEventType.OBLIGATION_CREATED,
-        "Obligation created manually",
+        "Commitment added by you",
         user_id=user.id,
         obligation_id=ob.id,
         actor=Actor.user(user),
@@ -169,7 +169,7 @@ def acknowledge(ob: Obligation, now: datetime) -> None:
 def apply_patch(db: Session, user: User, ob: Obligation, patch: ObligationPatch, now: datetime, settings: Settings) -> list[str]:
     """Apply an edit. Returns the list of changed field names (empty = no-op)."""
     if ob.status in TERMINAL_STATUSES:
-        raise ConflictError("Reopen this obligation before editing it", code="OBLIGATION_CLOSED")
+        raise ConflictError("Reopen this commitment before editing it", code="OBLIGATION_CLOSED")
     tz = user_zone(user, settings)
     before: dict[str, Any] = {}
     after: dict[str, Any] = {}
@@ -247,7 +247,7 @@ def accept(db: Session, user: User, ob: Obligation, now: datetime, settings: Set
     """User confirms a detection is real (NEEDS_REVIEW/DETECTED -> OPEN) or acknowledges an auto-created one."""
     actor = actor or Actor.user(user)
     if ob.status in TERMINAL_STATUSES:
-        raise InvalidTransition(f"A {ob.status.value.lower()} obligation cannot be accepted; reopen it instead")
+        raise InvalidTransition(f"A {ob.status.value.lower()} commitment cannot be accepted; reopen it instead")
     changed = False
     if ob.status in (S.DETECTED, S.NEEDS_REVIEW):
         changed = lifecycle.transition(db, ob, S.OPEN, actor=actor, now=now)
@@ -320,7 +320,7 @@ def _spawn_next_occurrence(db: Session, user: User, ob: Obligation, now: datetim
     )
     db.add(nxt)
     db.flush()
-    for target, other, text in ((ob, nxt, "Next occurrence created"), (nxt, ob, "Created from recurring obligation")):
+    for target, other, text in ((ob, nxt, "Next occurrence created"), (nxt, ob, "Created from a repeating commitment")):
         audit.record(
             db,
             AuditEventType.RECURRENCE_SPAWNED,

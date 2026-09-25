@@ -127,6 +127,7 @@ def get_obligation(
         )
     )
     tz = svc.user_zone(user, settings)
+    target = followups.follow_up_target(db, ob, user)
     return ObligationDetail(
         obligation=_out(ob),
         understanding=Understanding.model_validate(detail.build_understanding(ob, primary, tz.key)),
@@ -136,8 +137,10 @@ def get_obligation(
         calendar_events=[CalendarEventOut.model_validate(c) for c in cal],
         runs=[AutomationRunOut.for_viewer(r) for r in runs],
         suggested_next_action=detail.suggest_next_action(
-            ob, now, has_calendar_event=bool(cal), open_follow_up=detail.open_follow_up(db, ob)
+            ob, now, has_calendar_event=bool(cal), open_follow_up=detail.open_follow_up(db, ob), follow_up_to=target.address
         ),
+        follow_up_to=target.address,
+        follow_up_to_original=target.from_original_email,
         now=now,
         timezone=tz.key,
     )
@@ -295,14 +298,15 @@ def create_follow_up(
     """Draft a follow-up email. Nothing is sent until the user approves the draft."""
     ob = svc.get_owned(db, user, obligation_id, lock=True)
     if ob.status in (ObligationStatus.COMPLETED, ObligationStatus.DISMISSED):
-        raise ConflictError("This obligation is closed", code="OBLIGATION_CLOSED")
-    if not ob.counterparty_email:
-        raise ValidationFailed("There is no recipient for a follow-up: add a counterparty email to this obligation first")
+        raise ConflictError("This commitment is closed", code="OBLIGATION_CLOSED")
+    target = followups.follow_up_target(db, ob, user)
+    if target.address is None:
+        raise ValidationFailed(approvals.NO_ADDRESS)
     draft = followups.draft_follow_up(ob, user, now, svc.user_zone(user, settings))
     approval, _ = approvals.propose(
         db, user=user, ob=ob, action=ApprovalAction.SEND_FOLLOW_UP,
-        title=f"Send follow-up to {ob.counterparty_name or ob.counterparty_email}",
-        payload={"to": ob.counterparty_email, **draft}, proposed_by="SYSTEM",
+        title=f"Send follow-up to {ob.counterparty_name or target.address}",
+        payload={"to": target.address, **draft}, proposed_by="SYSTEM",
         rationale="Drafted from a template. Review and edit it; it will not be sent until you approve.",
         now=now, settings=settings,
     )

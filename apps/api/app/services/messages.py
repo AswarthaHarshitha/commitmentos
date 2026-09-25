@@ -28,11 +28,40 @@ class Content:
 
 _SOURCE_LABEL = {
     SourceType.GMAIL: "an email",
-    SourceType.DEMO: "a demo email",
     SourceType.GOOGLE_CALENDAR: "your calendar",
     SourceType.WEBHOOK: "an incoming message",
     SourceType.MANUAL: "your notes",
+    SourceType.IMPORTED: "an email you pasted in",
 }
+
+
+LOCAL_INBOX_NOTE = "into the local test inbox, not to a real mailbox"
+
+
+_CHANNEL_PHRASE = {"in_app": "in the app", "email": "by email", "telegram": "on Telegram"}
+
+_KIND_PHRASE = {
+    NotificationKind.DETECTED: "New-commitment notice",
+    NotificationKind.NEEDS_REVIEW: "Review request",
+    NotificationKind.REMINDER: "Reminder",
+    NotificationKind.HIGH_PRIORITY_REMINDER: "Final reminder",
+    NotificationKind.OVERDUE: "Overdue notice",
+    NotificationKind.ESCALATION: "Escalation notice",
+    NotificationKind.APPROVAL_REQUESTED: "Approval request",
+    NotificationKind.ACTION_RESULT: "Action result",
+    NotificationKind.CALENDAR_SUGGESTION: "Calendar suggestion",
+    NotificationKind.FOLLOW_UP_SUGGESTION: "Follow-up suggestion",
+}
+
+
+def channels_phrase(channels: list[str]) -> str:
+    """['in_app', 'email'] -> 'in the app and by email'."""
+    words = [_CHANNEL_PHRASE.get(c.lower(), c.lower()) for c in channels]
+    return " and ".join([", ".join(words[:-1]), words[-1]] if len(words) > 2 else words)
+
+
+def kind_phrase(kind: NotificationKind) -> str:
+    return _KIND_PHRASE.get(kind, kind.value.replace("_", " ").capitalize())
 
 
 def _links(ob: Obligation, settings: Settings, now: datetime, complete_button: bool) -> list[dict[str, str]]:

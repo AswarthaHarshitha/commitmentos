@@ -107,7 +107,7 @@ def test_an_approval_that_expires_unanswered_also_resolves_the_run(alice, n8n_he
 
 
 def test_closing_the_obligation_withdraws_the_proposal_and_resolves_the_run(alice, n8n_headers, db):
-    ob = make_obligation(db, me(db), due_at=NOW + timedelta(days=1))
+    ob = make_obligation(db, me(db), due_at=NOW + timedelta(days=1), counterparty_email="hr@example.org")
     db.commit()
     start(alice, n8n_headers)
     propose(alice, n8n_headers, ob, action="SEND_FOLLOW_UP", payload={"to": "hr@example.org", "subject": "s", "body": "b"})
@@ -118,7 +118,7 @@ def test_closing_the_obligation_withdraws_the_proposal_and_resolves_the_run(alic
 
 
 def test_an_approved_action_that_fails_for_good_marks_the_run_failed(alice, n8n_headers, db, fake_n8n):
-    ob = make_obligation(db, me(db), due_at=NOW + timedelta(days=1))
+    ob = make_obligation(db, me(db), due_at=NOW + timedelta(days=1), counterparty_email="hr@example.org")
     db.commit()
     start(alice, n8n_headers)
     approval_id = propose(alice, n8n_headers, ob, action="SEND_FOLLOW_UP", payload={"to": "hr@example.org", "subject": "s", "body": "b"})["approval_id"]

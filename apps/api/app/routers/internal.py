@@ -23,7 +23,7 @@ from app.deps import enforce, get_now, limiter, require_n8n
 from app.enums import ApprovalStatus, SourceType
 from app.errors import NotFoundError, ValidationFailed
 from app.models import ApprovalRequest, Obligation, User
-from app.services import approvals, audit, calendar_sync, completion, demo, followups, ingestion, monitor, notifications
+from app.services import approvals, audit, calendar_sync, completion, followups, ingestion, monitor, notifications, testclock
 from app.services.extraction.llm import LLMClient, get_llm_client
 from app.services.extraction.schema import MessageEnvelope
 from app.services.extraction.service import ExtractionStatus, extract_message
@@ -207,12 +207,12 @@ def completion_check(
     return JSONResponse(content=payload)
 
 
-# ------------------------------------------------------------------------------------ demo clock
+# ------------------------------------------------------------------------------------ test clock
 class ClockCommand(BaseModel):
     """Exactly one of: advance the virtual clock, jump it to a moment, or hand it back to real time."""
 
     model_config = ConfigDict(extra="forbid")
-    advance_seconds: int | None = Field(default=None, ge=1, le=int(demo.MAX_ADVANCE.total_seconds()))
+    advance_seconds: int | None = Field(default=None, ge=1, le=int(testclock.MAX_ADVANCE.total_seconds()))
     set_to: datetime | None = None
     reset: bool = False
 
@@ -223,28 +223,28 @@ class ClockCommand(BaseModel):
         return self
 
 
-def _require_demo(settings: Settings) -> None:
-    if not settings.demo_mode:
-        raise NotFoundError("Demo mode is not enabled")  # 404: a production instance does not advertise time travel
+def _require_test_clock(settings: Settings) -> None:
+    if not settings.test_clock:
+        raise NotFoundError("The test clock is not enabled")  # 404: a real instance does not advertise time travel
 
 
-@router.get("/demo/clock", summary="The virtual clock (demo mode only)")
+@router.get("/test-clock", summary="The virtual clock (test stack only)")
 def get_clock(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
-    _require_demo(settings)
-    return demo.state()
+    _require_test_clock(settings)
+    return testclock.state()
 
 
-@router.post("/demo/clock", summary="Advance, set or reset the virtual clock (demo mode only)")
+@router.post("/test-clock", summary="Advance, set or reset the virtual clock (test stack only)")
 def command_clock(body: ClockCommand, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)) -> dict[str, Any]:
-    _require_demo(settings)
+    _require_test_clock(settings)
     if body.reset:
-        result = demo.reset(db)
+        result = testclock.reset(db)
     elif body.advance_seconds is not None:
-        result = demo.advance(db, timedelta(seconds=body.advance_seconds))
+        result = testclock.advance(db, timedelta(seconds=body.advance_seconds))
     else:
         assert body.set_to is not None
         try:
-            result = demo.set_to(db, body.set_to)
+            result = testclock.set_to(db, body.set_to)
         except ValueError as exc:
             raise ValidationFailed(str(exc)) from exc
     db.commit()

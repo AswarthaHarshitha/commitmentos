@@ -175,7 +175,7 @@ def test_bearer_requests_are_not_subject_to_the_cookie_csrf_rule(client, make_cl
     assert r.status_code == 201  # an attacker page cannot make the browser attach an Authorization header
 
 
-def test_demo_clock_time_travel_never_expires_or_pre_dates_a_session(alice):
+def test_moving_the_test_clock_never_expires_or_pre_dates_a_session(alice):
     clock.freeze(datetime.now(UTC) + timedelta(days=30))
     assert alice.get("/api/auth/me").status_code == 200  # sessions use real time, not the business clock
 

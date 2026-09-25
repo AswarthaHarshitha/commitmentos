@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     # --- runtime ---
     app_env: Literal["development", "test", "production"] = "development"
     log_level: str = "INFO"
-    demo_mode: bool = False
+    test_clock: bool = False  # lets the end-to-end suite move time; never enabled for real use
     public_web_url: str = "http://localhost:3000"
 
     # --- database ---
@@ -86,12 +86,19 @@ class Settings(BaseSettings):
 
     # --- notification identity ---
     notify_from_email: str = "commitmentos@localhost"
+    smtp_host: str = "mailpit"  # where n8n hands outgoing mail; the API only reads it to say truthfully where mail ends up
     calendar_provider: Literal["local", "google"] = "local"
 
     # --- rate limiting (in-memory, per process) ---
     rate_limit_login_per_minute: int = Field(default=10, ge=1)
     rate_limit_register_per_hour: int = Field(default=10, ge=1)
     rate_limit_api_per_minute: int = Field(default=600, ge=10)
+
+    @property
+    def mail_goes_to_local_sink(self) -> bool:
+        """True while outgoing mail is handed to the bundled Mailpit (or any local server): it is caught on this machine and never
+        reaches a real mailbox. The product must say so wherever it reports that an email was sent."""
+        return self.smtp_host.strip().lower() in {"", "mailpit", "localhost", "127.0.0.1", "::1"}
 
     @field_validator("cors_origins", "reminder_offsets_hours", "notification_retry_backoff_seconds", mode="before")
     @classmethod
@@ -149,8 +156,8 @@ class Settings(BaseSettings):
                 problems.append(f"{name.upper()} must be at least 24 characters")
         if self.is_production and not self.cookie_secure:
             problems.append("COOKIE_SECURE must be true in production")
-        if self.is_production and self.demo_mode:
-            problems.append("DEMO_MODE must be false in production")
+        if self.is_production and self.test_clock:
+            problems.append("TEST_CLOCK must be false in production")
         if problems:
             raise RuntimeError("Insecure configuration: " + "; ".join(problems))
 

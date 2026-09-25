@@ -7,7 +7,7 @@ sent the documents"). It is always shown to the user for review/editing before a
 Which commitments qualify is a rule set, not a model:
   * something *someone else* promised us that is overdue (or, with no date, has been open for 3 days), or
   * something we owe that is overdue/escalated and has a counterparty to update,
-  and only if a real counterparty address is known (never the user's own) and no follow-up was proposed for it
+  and only if the address the original email came from is known (never the user's own) and no follow-up was proposed for it
   in the last 72 hours - so a scan can run as often as it likes without nagging.
 """
 
@@ -22,7 +22,7 @@ from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.config import Settings
-from app.enums import ACTIVE_STATUSES, ApprovalAction
+from app.enums import ACTIVE_STATUSES, ApprovalAction, SourceType
 from app.enums import ObligationStatus as S
 from app.models import ApprovalRequest, Obligation, Source, User
 from app.services.messages import fmt_when
@@ -30,6 +30,31 @@ from app.services.timeutil import get_zone
 
 COOLDOWN = timedelta(hours=72)
 STALE_WAITING = timedelta(days=3)
+
+
+@dataclass(frozen=True)
+class FollowUpTarget:
+    address: str | None
+    from_original_email: bool  # False: given by hand (a commitment with no email behind it), or unknown
+
+
+def follow_up_target(db: Session, ob: Obligation, user: User) -> FollowUpTarget:
+    """The one address a follow-up about this commitment may be sent to.
+
+    It is the address the original email came from - decided here, in code, from the stored message, never from what a language
+    model read out of the email's text (a message can mention other addresses, or try to steer a reply elsewhere). Only when an
+    email has no usable sender - a commitment the person added by hand, or wrote about in a message they sent themselves - is the
+    address recorded on the commitment used. It is never the person's own address.
+    """
+    own = user.email.lower()
+    sources = list(db.scalars(select(Source).where(Source.obligation_id == ob.id).order_by(Source.created_at)))
+    primary = next((s for s in sources if s.role == "PRIMARY"), sources[0] if sources else None)
+    if primary is not None and primary.source_type != SourceType.MANUAL and primary.sender_email:
+        sender = primary.sender_email.lower()
+        if sender != own:
+            return FollowUpTarget(sender, True)
+    recorded = (ob.counterparty_email or "").lower()
+    return FollowUpTarget(recorded if recorded and recorded != own else None, False)
 
 
 def _first_name(name: str | None) -> str:
@@ -97,27 +122,30 @@ def scan(db: Session, now: datetime, settings: Settings, limit: int = 25) -> lis
         select(Obligation, User)
         .join(User, User.id == Obligation.user_id)
         .where(
-            Obligation.counterparty_email.is_not(None),
-            func.lower(Obligation.counterparty_email) != func.lower(User.email),
             or_(waiting_on_them, overdue_of_ours),
             ~recently_proposed,
         )
         .order_by(func.coalesce(Obligation.due_at, Obligation.created_at))
-        .limit(limit)
+        .limit(limit * 4)  # some will have nobody to write to; look a little further than `limit`
     ).all()
 
     proposals: list[FollowUpProposal] = []
     for ob, user in rows:
+        if len(proposals) >= limit:
+            break
+        target = follow_up_target(db, ob, user)
+        if target.address is None:
+            continue
         tz = get_zone(user.timezone, settings.default_timezone)
         draft = draft_follow_up(ob, user, now, tz)
         origin = db.scalar(select(Source).where(Source.obligation_id == ob.id).order_by(Source.created_at).limit(1))
-        who = ob.counterparty_name or ob.counterparty_email
+        who = ob.counterparty_name or target.address
         if ob.owner != "me":
             expected = f" ({fmt_when(ob.due_at, ob.due_precision, tz)})" if ob.due_at else ""
             rationale = f"{ob.owner} was expected to deliver \"{ob.title}\"{expected}. A short check-in may help. It is only sent if you approve."
         else:
             rationale = f"\"{ob.title}\" is {ob.status.value.lower()}. A quick note to {who} may help. It is only sent if you approve."
-        payload: dict[str, Any] = {"to": ob.counterparty_email, **draft}
+        payload: dict[str, Any] = {"to": target.address, **draft}
         if origin is not None:
             payload["thread_id"], payload["in_reply_to"] = origin.thread_id, origin.rfc_message_id
         proposals.append(

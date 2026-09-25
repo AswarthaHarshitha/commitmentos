@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from typing import Any
@@ -203,8 +204,13 @@ def is_grounded(fragment: str | None, haystack: str, threshold: float) -> bool:
     return match.size / len(frag) >= threshold
 
 
-def validate_extraction(source: str | dict[str, Any], message_text: str, settings: Settings, *, sender_email: str | None = None) -> ValidatedExtraction:
-    """Validate an LLM reply (raw text) or a previously validated dict against the message it came from."""
+def validate_extraction(
+    source: str | dict[str, Any], message_text: str, settings: Settings, *, sender_email: str | None = None, known_addresses: Iterable[str] = ()
+) -> ValidatedExtraction:
+    """Validate an LLM reply (raw text) or a previously validated dict against the message it came from.
+
+    `known_addresses` are addresses from the message's own headers (its recipients): as trustworthy as the sender, and not part of
+    the text a model reads, so an address the model names is accepted if it is one of them."""
     raw = parse_json_object(source) if isinstance(source, str) else dict(source)
     normalised, warnings, unknown = normalise(raw)
     try:
@@ -237,7 +243,7 @@ def validate_extraction(source: str | dict[str, Any], message_text: str, setting
 
     if data.counterparty_email:
         email = data.counterparty_email.lower()
-        if not (email in message_text.lower() or email == (sender_email or "").lower()):
+        if not (email in message_text.lower() or email == (sender_email or "").lower() or email in {a.lower() for a in known_addresses}):
             result.warnings.append("the counterparty email does not appear in the message and was discarded")
             data.counterparty_email = None
         else:

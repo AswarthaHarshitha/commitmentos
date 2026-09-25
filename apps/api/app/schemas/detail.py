@@ -39,6 +39,8 @@ class ObligationDetail(BaseModel):
     calendar_events: list[CalendarEventOut]
     runs: list[AutomationRunOut]
     suggested_next_action: SuggestedAction
+    follow_up_to: str | None = None
+    follow_up_to_original: bool = False
     now: dt.datetime
     timezone: str
     extra: dict[str, Any] = {}

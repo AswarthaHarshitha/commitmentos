@@ -21,8 +21,8 @@ from app.config import get_settings
 from app.db import get_engine, get_sessionmaker
 from app.errors import install_error_handlers
 from app.logging_config import configure_logging
-from app.routers import actions, approvals, auth, candidates, feeds, internal, obligations, webhooks
-from app.services import demo
+from app.routers import actions, approvals, auth, candidates, feeds, internal, messages, obligations, webhooks
+from app.services import testclock
 
 log = logging.getLogger("commitmentos")
 
@@ -35,11 +35,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     if settings.is_production:
         settings.assert_production_safe()
-    log.info("CommitmentOS API starting (env=%s, demo=%s, llm=%s)", settings.app_env, settings.demo_mode, settings.llm_provider)
-    if settings.demo_mode:
+    log.info("CommitmentOS API starting (env=%s, llm=%s)", settings.app_env, settings.llm_provider)
+    if settings.test_clock:
         with get_sessionmaker()() as db:
-            demo.restore_clock(db)
-        log.info("demo mode: virtual clock offset restored (%ds)", int(clock.offset.total_seconds()))
+            testclock.restore_clock(db)
+        log.warning("TEST_CLOCK is on (offset %ds): this must never run next to real data", int(clock.offset.total_seconds()))
     yield
 
 
@@ -122,7 +122,7 @@ def create_app() -> FastAPI:
             return JSONResponse(status_code=503, content={"status": "degraded", "db": "down", "version": __version__})
         return JSONResponse(content={"status": "ok", "db": "ok", "version": __version__})
 
-    for module in (auth, obligations, candidates, approvals, feeds, webhooks, internal, actions):
+    for module in (auth, obligations, candidates, approvals, messages, feeds, webhooks, internal, actions):
         app.include_router(module.router)
     return app
 

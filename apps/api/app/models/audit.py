@@ -17,7 +17,7 @@ class AuditEvent(Base):
 
     Immutability is enforced in the database (see the migration): a trigger rejects UPDATE
     and DELETE, so even a bug in application code cannot rewrite history.
-    ``created_at`` comes from the app clock so demo time-travel produces a coherent story.
+    ``created_at`` comes from the app clock so a moved test clock produces a coherent history.
     """
 
     __tablename__ = "audit_events"

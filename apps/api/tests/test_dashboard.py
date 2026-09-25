@@ -127,7 +127,7 @@ def test_status_counts_and_part_of_day_follow_the_app_clock(alice, db):
 
 def test_system_status_exposes_the_clock_so_the_ui_can_agree_with_the_server(alice):
     s = alice.get("/api/system/status").json()
-    assert s["now"] == "2026-09-24T12:00:00Z" and s["demo_mode"] is False and s["llm_provider"] == "none" and s["calendar_provider"] == "local"
+    assert s["now"] == "2026-09-24T12:00:00Z" and "demo_mode" not in s and s["llm_provider"] == "none" and s["calendar_provider"] == "local"
     assert s["n8n"]["checked"] in (True, False) and s["version"]
 
 
@@ -140,3 +140,22 @@ def test_system_status_reports_the_llm_that_will_really_be_used_for_any_provider
     s = alice.get("/api/system/status").json()
     assert s["llm_configured"] is True and s["llm_model"] == "gemini-3-flash-preview"
     assert "k" * 20 not in str(s)
+
+
+def test_the_focus_is_what_the_user_must_do_before_what_they_are_waiting_on(alice, db):
+    """A colleague's escalated promise is later than the user's own overdue payment, but it is not the user's to do."""
+    me = _alice(db)
+    make_obligation(db, me, title="Marcus to send the comparison", owner="Marcus", status=S.ESCALATED, due_at=NOW - timedelta(days=3))
+    mine = make_obligation(db, me, title="Pay the rent", status=S.OVERDUE, due_at=NOW - timedelta(days=1))
+    db.commit()
+    d = dash(alice)
+    assert d["focus"]["id"] == str(mine.id)
+    assert [o["title"] for o in d["today"]["overdue"]] == ["Pay the rent", "Marcus to send the comparison"]  # both are listed, mine first
+
+
+def test_when_nothing_of_the_users_is_urgent_a_late_promise_from_someone_else_still_gets_the_spotlight(alice, db):
+    me = _alice(db)
+    theirs = make_obligation(db, me, title="Marcus to send the comparison", owner="Marcus", status=S.OVERDUE, due_at=NOW - timedelta(days=2))
+    make_obligation(db, me, title="Renew the licence", due_at=NOW + timedelta(days=30))
+    db.commit()
+    assert dash(alice)["focus"]["id"] == str(theirs.id)

@@ -165,7 +165,7 @@ def _describe(src: S, to: S, via: str | None, reason: str | None) -> str:
     if to == S.ESCALATED:
         return "Still unresolved after the escalation period - escalated"
     if src in (S.DETECTED, S.NEEDS_REVIEW) and to == S.OPEN:
-        return "Accepted as a tracked obligation"
+        return "Accepted as a tracked commitment"
     if to == S.OPEN and src in (S.COMPLETED, S.DISMISSED):
         return f"Reopened (was {src.value.lower()})"
-    return f"Status changed from {src.value} to {to.value}"
+    return f"Status changed from {src.value.replace('_', ' ').lower()} to {to.value.replace('_', ' ').lower()}"

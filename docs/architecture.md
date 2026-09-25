@@ -36,7 +36,7 @@ effect. Even a perfect prompt injection in an email can, at worst, produce a *pr
                       PostgreSQL            Mailpit (dev SMTP sink)
 ```
 
-* **apps/api** - FastAPI + SQLAlchemy 2 + Alembic (4 migrations). Single process by design: the rate limiter and the demo clock are
+* **apps/api** - FastAPI + SQLAlchemy 2 + Alembic (4 migrations). Single process by design: the rate limiter and the test clock are
   per-process.
 * **apps/web** - Next.js (App Router) + Tailwind. Talks only to `/api/*`, proxied so the browser sees one origin.
 * **automation/n8n** - the eight workflows, generated from `definitions/` by `build.js`, imported and published on boot by
@@ -47,7 +47,7 @@ effect. Even a perfect prompt injection in an email can, at worst, produce a *pr
 ## Contracts between n8n and the API
 
 n8n -> API (`X-Webhook-Secret`): `/api/internal/{messages/check, extract, monitor/tick, notifications/claim, approvals/claim,
-approvals/{id}, calendar/scan, followups/scan, completion/check, demo/clock}` and `POST /api/webhooks/n8n` with one strictly-typed
+approvals/{id}, calendar/scan, followups/scan, completion/check, test-clock}` and `POST /api/webhooks/n8n` with one strictly-typed
 event per kind (`run.started`, `run.finished`/`run.failed`, `message.extracted`, `notification.sent|failed`,
 `approval.executed|failed`, `proposal.created`). API -> n8n (`X-CommitmentOS-Key`): the approval push webhook.
 
@@ -67,7 +67,7 @@ Secrets exist only in `.env` (git-ignored) and, encrypted, inside n8n; they neve
 ## Time
 
 * Everything is stored as `timestamptz` (UTC). Users have an IANA timezone; the API returns UTC instants.
-* **All rules read time from `app.clock`** (or take an explicit `now`). Tests freeze it; demo mode offsets it (persisted) so a
+* **All rules read time from `app.clock`** (or take an explicit `now`). Tests freeze it; the isolated end-to-end stack can offset it (persisted, `TEST_CLOCK=true`, never enabled next to real data) so a
   two-day reminder ladder runs in seconds without special-casing any rule.
 * Relative expressions ("tomorrow") resolve against the *message's received time*, in the user's timezone, DST-aware. Several
   times in one phrase: a range ("10-11am") resolves to its start; unrelated times to the earliest, flagged for review.

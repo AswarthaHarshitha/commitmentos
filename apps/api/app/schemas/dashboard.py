@@ -55,9 +55,7 @@ class DashboardOut(BaseModel):
 
 class SystemStatus(BaseModel):
     now: dt.datetime
-    real_now: dt.datetime
-    clock_offset_seconds: int
-    demo_mode: bool
+    email_delivery: Literal["local_test_inbox", "smtp"]
     llm_provider: str
     llm_model: str | None = None
     llm_configured: bool

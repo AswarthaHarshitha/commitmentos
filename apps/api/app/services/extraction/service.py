@@ -293,7 +293,7 @@ def extract_message(message: MessageEnvelope, user: User, settings: Settings, ll
         try:
             if response.stop_reason == "max_tokens":
                 raise InvalidOutput(["the reply hit the output limit and was cut off"])
-            validated = validate_extraction(response.text, grounding_text, settings, sender_email=message.sender_email)
+            validated = validate_extraction(response.text, grounding_text, settings, sender_email=message.sender_email, known_addresses=message.recipients)
             break
         except InvalidOutput as exc:
             reasons = exc.reasons

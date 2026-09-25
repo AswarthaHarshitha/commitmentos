@@ -85,8 +85,6 @@ def test_only_a_pending_draft_can_be_edited_and_edits_are_revalidated(db):
     approvals.edit(db, user, a, ApprovalPatch(subject="New subject", body="Edited body"), NOW)
     assert a.payload["subject"] == "New subject" and a.payload["to"] == "hr@example.org"
     with pytest.raises(ValidationFailed):
-        approvals.edit(db, user, a, ApprovalPatch(to="nope"), NOW)
-    with pytest.raises(ValidationFailed):
         approvals.edit(db, user, a, ApprovalPatch(start_at=NOW), NOW)  # not an editable field of a follow-up
     approvals.approve(db, user, a, NOW, settings)
     with pytest.raises(ConflictError):
@@ -222,7 +220,7 @@ def test_follow_up_without_a_recipient_is_a_clear_validation_error(alice, db):
     ob = make_obligation(db, user, due_at=NOW + timedelta(days=1))
     db.commit()
     r = alice.post(f"/api/obligations/{ob.id}/follow-up")
-    assert r.status_code == 422 and "recipient" in r.json()["detail"]
+    assert r.status_code == 422 and "no address to send a follow-up to" in r.json()["detail"]
 
 
 def test_approving_over_http_triggers_n8n_exactly_once_with_only_the_id(alice, fake_n8n, db):

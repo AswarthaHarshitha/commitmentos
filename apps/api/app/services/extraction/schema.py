@@ -66,7 +66,6 @@ class MessageEnvelope(BaseModel):
     received_at: dt.datetime | None = None
     recipients: list[str] = Field(default_factory=list, max_length=20, description="To/Cc addresses; who a message the owner SENT was addressed to")
     direction: Literal["INBOUND", "OUTBOUND"] = "INBOUND"
-    is_synthetic: bool = False
 
     @model_validator(mode="after")
     def _aware(self) -> MessageEnvelope:

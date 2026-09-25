@@ -34,7 +34,7 @@ from app.enums import (
 from app.errors import ConflictError, NotFoundError, ValidationFailed
 from app.models import ApprovalRequest, CalendarEvent, Obligation, User
 from app.schemas.misc import ApprovalPatch
-from app.services import audit, automation, lifecycle, messages, notifications
+from app.services import audit, automation, followups, lifecycle, messages, notifications
 from app.services import obligations as ob_service
 from app.services.audit import Actor
 from app.services.reminders import policy_for
@@ -81,6 +81,18 @@ def validate_payload(action: ApprovalAction, payload: dict[str, Any]) -> dict[st
         raise ValidationFailed("Invalid action payload: " + "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())) from exc
 
 
+NO_ADDRESS = "There is no address to send a follow-up to: the original email had no sender address. Add their email to the commitment first"
+
+
+def _require_original_recipient(db: Session, ob: Obligation, user: User, to: str) -> None:
+    """A follow-up goes to the address the original email came from, and nowhere else - however the proposal arrived."""
+    target = followups.follow_up_target(db, ob, user)
+    if target.address is None:
+        raise ValidationFailed(NO_ADDRESS)
+    if to.strip().lower() != target.address:
+        raise ValidationFailed(f"A follow-up can only be addressed to {target.address}, the address the original email came from")
+
+
 def get_owned(db: Session, user: User, approval_id: uuid.UUID, *, lock: bool = False) -> ApprovalRequest:
     stmt = select(ApprovalRequest).where(ApprovalRequest.id == approval_id, ApprovalRequest.user_id == user.id)
     if lock:
@@ -108,6 +120,9 @@ def propose(
     run_id: uuid.UUID | None = None,
 ) -> tuple[ApprovalRequest, bool]:
     """Create an approval request. Idempotent: an open request of the same kind is returned as-is."""
+    payload = validate_payload(action, payload)
+    if action == ApprovalAction.SEND_FOLLOW_UP:
+        _require_original_recipient(db, ob, user, payload["to"])
     existing = db.scalar(
         select(ApprovalRequest).where(
             ApprovalRequest.obligation_id == ob.id,
@@ -126,7 +141,7 @@ def propose(
         proposed_by=proposed_by,
         title=title[:300],
         rationale=rationale,
-        payload=validate_payload(action, payload),
+        payload=payload,
         expires_at=now + timedelta(hours=settings.approval_ttl_hours),
         decided_at=now if status == A.APPROVED else None,
         created_at=now,
@@ -167,7 +182,7 @@ def edit(db: Session, user: User, approval: ApprovalRequest, patch: ApprovalPatc
     if approval.status != A.PENDING:
         raise ConflictError("Only a pending request can be edited", code="APPROVAL_NOT_PENDING")
     fields = {k: v for k, v in patch.model_dump(exclude_unset=True).items() if v is not None}
-    allowed = {"subject", "body", "to"} if approval.action_type == ApprovalAction.SEND_FOLLOW_UP else {"start_at", "end_at"}
+    allowed = {"subject", "body"} if approval.action_type == ApprovalAction.SEND_FOLLOW_UP else {"start_at", "end_at"}
     illegal = set(fields) - allowed
     if illegal:
         raise ValidationFailed(f"Cannot edit {sorted(illegal)} on a {approval.action_type.value} request")
@@ -235,6 +250,15 @@ def _execute_locally(db: Session, user: User, approval: ApprovalRequest, now: da
     )
 
 
+def _recipient_still_original(db: Session, approval: ApprovalRequest) -> bool:
+    ob = db.get(Obligation, approval.obligation_id)
+    user = db.get(User, approval.user_id)
+    if ob is None or user is None:
+        return False
+    target = followups.follow_up_target(db, ob, user)
+    return target.address is not None and str(approval.payload.get("to", "")).strip().lower() == target.address
+
+
 def claim(db: Session, now: datetime, settings: Settings, limit: int = 10) -> list[ApprovalRequest]:
     """n8n takes ownership of approved external actions (APPROVED -> EXECUTING), atomically."""
     lease_cutoff = now - timedelta(seconds=settings.sending_lease_seconds)
@@ -256,6 +280,11 @@ def claim(db: Session, now: datetime, settings: Settings, limit: int = 10) -> li
         if approval.attempts >= settings.n8n_max_attempts:
             approval.status = A.FAILED
             approval.error = approval.error or "gave up: execution lease expired repeatedly"
+            continue
+        if approval.action_type == ApprovalAction.SEND_FOLLOW_UP and not _recipient_still_original(db, approval):
+            # last line of defence before anything leaves the system: the stored address must still be the original sender's
+            approval.status = A.FAILED
+            approval.error = "Not sent: the recipient is no longer the address the original email came from."
             continue
         approval.status = A.EXECUTING
         approval.claimed_at = now
@@ -306,6 +335,8 @@ def report_result(
     if approval.action_type == ApprovalAction.CREATE_CALENDAR_EVENT:
         _apply_calendar_result(db, user, ob, approval, now)
         message = f"Calendar event created: {approval.title}"
+    elif settings.mail_goes_to_local_sink:
+        message = f"Placed {messages.LOCAL_INBOX_NOTE} (email delivery is not set up): {approval.title}"
     else:
         message = f"Sent: {approval.title}"
     audit.record(
@@ -348,12 +379,19 @@ def _apply_calendar_result(db: Session, user: User, ob: Obligation, approval: Ap
     db.flush()
 
 
+def _result_sentence(approval: ApprovalRequest, settings: Settings) -> str:
+    if approval.action_type == ApprovalAction.SEND_FOLLOW_UP and settings.mail_goes_to_local_sink:
+        return " The email was placed in the local test inbox. Nothing reached a real mailbox because email delivery is not set up."
+    return " It went through."
+
+
 def _notify_result(db: Session, user: User, ob: Obligation, approval: ApprovalRequest, *, ok: bool, now: datetime, settings: Settings) -> None:
     policy = policy_for(user, settings)
     base = settings.public_web_url.rstrip("/")
+    outcome = _result_sentence(approval, settings) if ok else f" {approval.error or ''} You can try again from the commitment page."
     content = messages.Content(
         ("Done: " if ok else "Could not complete: ") + approval.title,
-        [f"For \"{ob.title}\"." + (" It went through." if ok else f" {approval.error or ''} You can try again from the commitment page.")],
+        [f"For \"{ob.title}\"." + outcome],
         [{"label": "Open commitment", "url": f"{base}/obligations/{ob.id}"}],
     )
     notifications.queue(

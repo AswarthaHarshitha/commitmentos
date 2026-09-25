@@ -33,7 +33,7 @@ os.environ["LLM_PROVIDER"] = "none"  # tests inject fake LLM clients explicitly
 # Hermetic by construction: a developer's real keys (e.g. from `source scripts/dev-env.sh`) must never reach a test.
 for _secret in ("GEMINI_API_KEY", "LLM_API_KEY", "TELEGRAM_BOT_TOKEN", "SMTP_PASSWORD"):
     os.environ[_secret] = ""
-os.environ["DEMO_MODE"] = "false"
+os.environ["TEST_CLOCK"] = "false"
 os.environ["DEFAULT_TIMEZONE"] = "UTC"
 
 from app.config import get_settings  # noqa: E402
@@ -119,11 +119,13 @@ class FakeN8n:
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict]] = []
         self.fail_with: str | None = None
+        self.options: dict = {}
 
-    def trigger(self, path: str, payload: dict):
+    def trigger(self, path: str, payload: dict, **options):
         from app.services.n8n_client import TriggerResult
 
         self.calls.append((path, payload))
+        self.options = options
         if self.fail_with:
             return TriggerResult(False, None, self.fail_with, 3)
         return TriggerResult(True, 200, None, 1)

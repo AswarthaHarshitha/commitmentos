@@ -34,23 +34,29 @@ def part_of_day(now: datetime, tz) -> str:
     return "morning" if hour < 12 else "afternoon" if hour < 18 else "evening"
 
 
-def urgency_rank(ob: Obligation, now: datetime) -> tuple[int, float, int]:
-    """Lower sorts first. (state group, hours-until-due, -priority)."""
+def _urgency_group(ob: Obligation, now: datetime) -> int:
     if ob.status == S.ESCALATED:
-        group = 0
-    elif ob.status == S.OVERDUE:
-        group = 1
-    elif ob.due_at is not None and ob.due_at - now <= timedelta(hours=24):
-        group = 2
-    else:
-        group = 3
+        return 0
+    if ob.status == S.OVERDUE:
+        return 1
+    if ob.due_at is not None and ob.due_at - now <= timedelta(hours=24):
+        return 2
+    return 3
+
+
+def urgency_rank(ob: Obligation, now: datetime) -> tuple[int, int, float, int]:
+    """Lower sorts first: (owed by someone else?, state group, hours until due, -priority).
+
+    What the user must do outranks what they are merely waiting for: an overdue payment of theirs comes before a colleague's
+    escalated promise, however late that is.
+    """
     hours = (ob.due_at - now).total_seconds() / 3600 if ob.due_at else 1e9
-    return group, hours, -_PRIORITY_WEIGHT[ob.priority]
+    return (0 if ob.owner == "me" else 1), _urgency_group(ob, now), hours, -_PRIORITY_WEIGHT[ob.priority]
 
 
 def pick_focus(items: list[Obligation], now: datetime) -> Obligation | None:
     """The one commitment that should visually dominate: the most urgent, if anything is urgent."""
-    urgent = [o for o in items if urgency_rank(o, now)[0] <= 2]
+    urgent = [o for o in items if _urgency_group(o, now) <= 2]
     return min(urgent, key=lambda o: urgency_rank(o, now)) if urgent else None
 
 

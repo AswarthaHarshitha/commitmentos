@@ -213,7 +213,6 @@ class SourceOut(BaseModel):
     received_at: dt.datetime | None
     disposition: SourceDisposition
     role: str
-    is_synthetic: bool
     created_at: dt.datetime
 
 

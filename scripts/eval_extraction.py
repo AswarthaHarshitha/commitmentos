@@ -153,8 +153,8 @@ def main() -> int:
         email, name = parse_sender(item["from"])
         received = parse_utc(item["received_at"])
         message = MessageEnvelope(
-            source_type="DEMO", external_id=item["id"], sender_email=email, sender_name=name, subject=item["subject"], body=item["body"],
-            received_at=received, direction=item.get("direction", "INBOUND"), is_synthetic=True,
+            source_type="WEBHOOK", external_id=item["id"], sender_email=email, sender_name=name, subject=item["subject"], body=item["body"],
+            received_at=received, direction=item.get("direction", "INBOUND"),
         )
         now = parse_utc(item["now"]) if item.get("now") else received + timedelta(minutes=5)
         last_call = time.monotonic()

@@ -22,7 +22,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from app.config import Settings
+from app.config import Settings, get_settings
 from app.enums import (
     TERMINAL_STATUSES,
     AuditEventType,
@@ -170,7 +170,7 @@ def delivery_view(note: Notification, user: User, settings: Settings) -> dict[st
     }
 
 
-def mark_sent(db: Session, note: Notification, now: datetime, run_id: uuid.UUID | None = None) -> None:
+def mark_sent(db: Session, note: Notification, now: datetime, run_id: uuid.UUID | None = None, settings: Settings | None = None) -> None:
     if note.status == NotificationStatus.SENT:
         return  # duplicate report from a retried webhook
     late = note.status == NotificationStatus.CANCELLED
@@ -184,11 +184,17 @@ def mark_sent(db: Session, note: Notification, now: datetime, run_id: uuid.UUID 
         ob = db.get(Obligation, note.obligation_id)
         if ob is not None:
             ob.last_notified_at = now
+    verb = "delivered" if note.channel == NotificationChannel.IN_APP else "sent"
+    local_mail = note.channel == NotificationChannel.EMAIL and (settings or get_settings()).mail_goes_to_local_sink
     audit.record(
         db,
         AuditEventType.NOTIFICATION_SENT,
-        f"{note.kind.value.replace('_', ' ').capitalize()} sent via {note.channel.value.lower()}"
-        + (" (delivered just after the obligation was closed)" if late else ""),
+        (
+            f"{messages.kind_phrase(note.kind)} placed {messages.LOCAL_INBOX_NOTE} (email delivery is not set up)"
+            if local_mail
+            else f"{messages.kind_phrase(note.kind)} {verb} {messages.channels_phrase([note.channel.value])}"
+        )
+        + (" (delivered just after the commitment was closed)" if late else ""),
         user_id=note.user_id,
         obligation_id=note.obligation_id,
         actor=Actor.n8n(),

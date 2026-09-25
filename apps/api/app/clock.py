@@ -2,12 +2,12 @@
 
 All deadline / reminder / escalation logic takes its time from here (or from an explicit
 ``now`` argument), never from ``datetime.now()`` directly. That makes the rules
-deterministic and testable, and lets demo mode fast-forward time so a recruiter can watch a
-24-hour reminder ladder in a few minutes without any special-cased code paths.
+deterministic and testable, and lets the end-to-end suite fast-forward time so a 24-hour reminder
+ladder can be exercised in seconds without any special-cased code paths.
 
 * In tests: ``clock.freeze(dt)`` pins time.
-* In demo mode: ``clock.advance(delta)`` moves the virtual clock forward (persisted by
-  ``services.demo``). Outside demo mode the offset is always zero.
+* In the end-to-end stack only (TEST_CLOCK=true): ``clock.advance(delta)`` moves the virtual clock forward
+  (persisted by ``services.testclock``). Everywhere else the offset is always zero.
 """
 
 from __future__ import annotations
