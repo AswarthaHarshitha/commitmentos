@@ -1,0 +1,46 @@
+# --- secrets & local config (NEVER commit) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+**/n8n-credentials.generated.json
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# --- Node / Next.js ---
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+playwright-report/
+test-results/
+
+# --- OS / editor ---
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# --- runtime artefacts ---
+*.log
+tmp/
+.scratch/
+
+# live-stack test artefacts
+e2e/.last-api.log
+e2e/__pycache__/
+e2e/.pytest_cache/
