@@ -1,0 +1,1065 @@
+{
+  "summary": {
+    "provider": "openai_compat",
+    "model": "qwen2.5:7b",
+    "dataset": "heldout",
+    "dataset_items": 18,
+    "items_run": 18,
+    "items_answered": 18,
+    "aborted": null,
+    "passed": 15,
+    "per_check": {
+      "ambiguity": "2/2",
+      "confirmation": "2/3",
+      "contract": "18/18",
+      "decision": "17/18",
+      "due": "12/12",
+      "grounded": "13/13",
+      "is_obligation": "16/17",
+      "owner": "2/2",
+      "pipeline_ok": "18/18",
+      "precision": "10/10",
+      "type": "11/12"
+    },
+    "obligation_detection": {
+      "tp": 12,
+      "fp": 1,
+      "fn": 0,
+      "tn": 4,
+      "precision": 0.923,
+      "recall": 1.0
+    },
+    "latency_seconds": {
+      "mean": 15.99,
+      "p95": 21.44,
+      "max": 23.59
+    },
+    "repair_retries": 0,
+    "tokens": {
+      "input": 23946,
+      "output": 3344
+    },
+    "auto_created_wrongly": [
+      "ho-flash-sale"
+    ]
+  },
+  "results": [
+    {
+      "id": "ho-invite-when",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true,
+        "due": true,
+        "precision": true,
+        "type": true,
+        "grounded": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "CREATE",
+        "is_obligation": true,
+        "confidence": 0.92,
+        "confidence_raw": 0.92,
+        "type": "APPOINTMENT",
+        "owner": "SELF",
+        "priority": "MEDIUM",
+        "requires_confirmation": true,
+        "deadline_text": "Friday, Sep 25, 2026 10:00 AM - 11:00 AM EDT",
+        "due_at": "2026-09-25T14:00:00+00:00",
+        "precision": "DATETIME",
+        "ambiguous": false,
+        "ambiguity": null,
+        "recurrence": null,
+        "warnings": [
+          "'EDT' was read as the regional timezone America/New_York (daylight saving aware)",
+          "A time range was given; its start was used"
+        ],
+        "reasons": [
+          "confidence 92% meets the auto-create threshold"
+        ],
+        "context_grounded": true,
+        "deadline_grounded": true,
+        "unknown_fields": [],
+        "counterparty_email": null
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "APPOINTMENT",
+          "TASK"
+        ],
+        "due_at": "2026-09-25T14:00:00Z",
+        "precision": "DATETIME",
+        "decision_in": [
+          "CREATE",
+          "REVIEW"
+        ]
+      },
+      "seconds": 23.59,
+      "attempts": 1,
+      "tokens": [
+        1355,
+        231
+      ]
+    },
+    {
+      "id": "ho-reschedule-friday",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true,
+        "due": true,
+        "precision": true,
+        "type": true,
+        "confirmation": true,
+        "grounded": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "CREATE",
+        "is_obligation": true,
+        "confidence": 0.9,
+        "confidence_raw": 0.9,
+        "type": "FOLLOW_UP",
+        "owner": "OTHER",
+        "priority": "MEDIUM",
+        "requires_confirmation": true,
+        "deadline_text": "Friday at 4pm",
+        "due_at": "2026-09-25T20:00:00+00:00",
+        "precision": "DATETIME",
+        "ambiguous": false,
+        "ambiguity": null,
+        "recurrence": null,
+        "warnings": [],
+        "reasons": [
+          "confidence 90% meets the auto-create threshold"
+        ],
+        "context_grounded": true,
+        "deadline_grounded": true,
+        "unknown_fields": [],
+        "counterparty_email": null
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "APPOINTMENT",
+          "TASK",
+          "FOLLOW_UP",
+          "OTHER"
+        ],
+        "due_at": "2026-09-25T20:00:00Z",
+        "precision": "DATETIME",
+        "decision_in": [
+          "CREATE",
+          "REVIEW",
+          "CANDIDATE"
+        ],
+        "confirm": true
+      },
+      "seconds": 12.5,
+      "attempts": 1,
+      "tokens": [
+        1330,
+        174
+      ]
+    },
+    {
+      "id": "ho-own-promise-sent",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true,
+        "due": true,
+        "precision": true,
+        "type": true,
+        "owner": true,
+        "grounded": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "CREATE",
+        "is_obligation": true,
+        "confidence": 0.95,
+        "confidence_raw": 0.95,
+        "type": "DOCUMENT_REQUEST",
+        "owner": "SELF",
+        "priority": "HIGH",
+        "requires_confirmation": false,
+        "deadline_text": "by Thursday end of day",
+        "due_at": "2026-09-24T21:00:00+00:00",
+        "precision": "DATETIME",
+        "ambiguous": false,
+        "ambiguity": null,
+        "recurrence": null,
+        "warnings": [],
+        "reasons": [
+          "confidence 95% meets the auto-create threshold"
+        ],
+        "context_grounded": true,
+        "deadline_grounded": true,
+        "unknown_fields": [],
+        "counterparty_email": null
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "PERSONAL_COMMITMENT",
+          "TASK",
+          "DEADLINE",
+          "FOLLOW_UP",
+          "DOCUMENT_REQUEST"
+        ],
+        "due_at": "2026-09-24T21:00:00Z",
+        "precision": "DATETIME",
+        "decision_in": [
+          "CREATE",
+          "REVIEW"
+        ],
+        "owner": "SELF"
+      },
+      "seconds": 12.16,
+      "attempts": 1,
+      "tokens": [
+        1326,
+        174
+      ]
+    },
+    {
+      "id": "ho-other-promise",
+      "passed": false,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true,
+        "due": true,
+        "precision": true,
+        "type": false,
+        "owner": true,
+        "grounded": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "CREATE",
+        "is_obligation": true,
+        "confidence": 0.95,
+        "confidence_raw": 0.95,
+        "type": "DOCUMENT_REQUEST",
+        "owner": "OTHER",
+        "priority": "MEDIUM",
+        "requires_confirmation": false,
+        "deadline_text": "on Tuesday",
+        "due_at": "2026-09-30T03:59:59+00:00",
+        "precision": "DATE",
+        "ambiguous": false,
+        "ambiguity": null,
+        "recurrence": null,
+        "warnings": [],
+        "reasons": [
+          "confidence 95% meets the auto-create threshold"
+        ],
+        "context_grounded": true,
+        "deadline_grounded": true,
+        "unknown_fields": [],
+        "counterparty_email": "robin@example.org"
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "FOLLOW_UP",
+          "TASK",
+          "OTHER",
+          "PERSONAL_COMMITMENT",
+          "DEADLINE"
+        ],
+        "due_at": "2026-09-30T03:59:59Z",
+        "precision": "DATE",
+        "decision_in": [
+          "CREATE",
+          "REVIEW"
+        ],
+        "owner": "OTHER"
+      },
+      "seconds": 12.26,
+      "attempts": 1,
+      "tokens": [
+        1321,
+        175
+      ]
+    },
+    {
+      "id": "ho-bill-due",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true,
+        "due": true,
+        "precision": true,
+        "ambiguity": true,
+        "type": true,
+        "grounded": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "CREATE",
+        "is_obligation": true,
+        "confidence": 0.95,
+        "confidence_raw": 0.95,
+        "type": "PAYMENT",
+        "owner": "SELF",
+        "priority": "HIGH",
+        "requires_confirmation": false,
+        "deadline_text": "by October 5, 2026",
+        "due_at": "2026-10-06T03:59:59+00:00",
+        "precision": "DATE",
+        "ambiguous": false,
+        "ambiguity": null,
+        "recurrence": null,
+        "warnings": [],
+        "reasons": [
+          "confidence 95% meets the auto-create threshold"
+        ],
+        "context_grounded": true,
+        "deadline_grounded": true,
+        "unknown_fields": [],
+        "counterparty_email": null
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "PAYMENT"
+        ],
+        "due_at": "2026-10-06T03:59:59Z",
+        "precision": "DATE",
+        "ambiguous": false,
+        "decision_in": [
+          "CREATE"
+        ]
+      },
+      "seconds": 13.72,
+      "attempts": 1,
+      "tokens": [
+        1336,
+        207
+      ]
+    },
+    {
+      "id": "ho-doctor-appt",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true,
+        "due": true,
+        "precision": true,
+        "ambiguity": true,
+        "type": true,
+        "grounded": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "CREATE",
+        "is_obligation": true,
+        "confidence": 0.92,
+        "confidence_raw": 0.92,
+        "type": "APPOINTMENT",
+        "owner": "SELF",
+        "priority": "HIGH",
+        "requires_confirmation": false,
+        "deadline_text": "Monday, September 28 at 9:15 AM",
+        "due_at": "2026-09-28T13:15:00+00:00",
+        "precision": "DATETIME",
+        "ambiguous": false,
+        "ambiguity": null,
+        "recurrence": null,
+        "warnings": [],
+        "reasons": [
+          "confidence 92% meets the auto-create threshold"
+        ],
+        "context_grounded": true,
+        "deadline_grounded": true,
+        "unknown_fields": [],
+        "counterparty_email": null
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "APPOINTMENT"
+        ],
+        "due_at": "2026-09-28T13:15:00Z",
+        "precision": "DATETIME",
+        "ambiguous": false,
+        "decision_in": [
+          "CREATE"
+        ]
+      },
+      "seconds": 13.92,
+      "attempts": 1,
+      "tokens": [
+        1347,
+        217
+      ]
+    },
+    {
+      "id": "ho-package-shipped",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "IGNORE",
+        "is_obligation": false,
+        "confidence": 0.97,
+        "confidence_raw": 0.97,
+        "type": "OTHER",
+        "owner": "SELF",
+        "priority": "LOW",
+        "requires_confirmation": false,
+        "deadline_text": "Thursday",
+        "due_at": "2026-09-25T03:59:59+00:00",
+        "precision": "DATE",
+        "ambiguous": false,
+        "ambiguity": null,
+        "recurrence": null,
+        "warnings": [],
+        "reasons": [
+          "the message does not contain an obligation"
+        ],
+        "context_grounded": false,
+        "deadline_grounded": false,
+        "unknown_fields": [],
+        "counterparty_email": null
+      },
+      "expected": {
+        "is_obligation": false,
+        "decision_in": [
+          "IGNORE",
+          "CANDIDATE"
+        ]
+      },
+      "seconds": 12.64,
+      "attempts": 1,
+      "tokens": [
+        1331,
+        190
+      ]
+    },
+    {
+      "id": "ho-security-alert",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "IGNORE",
+        "is_obligation": false,
+        "confidence": 0.97,
+        "confidence_raw": 0.97,
+        "type": "OTHER",
+        "owner": "SELF",
+        "priority": "LOW",
+        "requires_confirmation": false,
+        "deadline_text": null,
+        "due_at": null,
+        "precision": null,
+        "ambiguous": false,
+        "ambiguity": "No deadline phrase was found in the message.",
+        "recurrence": null,
+        "warnings": [],
+        "reasons": [
+          "the message does not contain an obligation"
+        ],
+        "context_grounded": false,
+        "deadline_grounded": false,
+        "unknown_fields": [],
+        "counterparty_email": null
+      },
+      "expected": {
+        "is_obligation": false,
+        "decision_in": [
+          "IGNORE",
+          "CANDIDATE"
+        ]
+      },
+      "seconds": 12.56,
+      "attempts": 1,
+      "tokens": [
+        1328,
+        175
+      ]
+    },
+    {
+      "id": "ho-48-hours",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true,
+        "due": true,
+        "precision": true,
+        "type": true,
+        "grounded": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "CREATE",
+        "is_obligation": true,
+        "confidence": 0.95,
+        "confidence_raw": 0.95,
+        "type": "DOCUMENT_REQUEST",
+        "owner": "SELF",
+        "priority": "HIGH",
+        "requires_confirmation": false,
+        "deadline_text": "within 48 hours",
+        "due_at": "2026-09-25T15:00:00+00:00",
+        "precision": "DATETIME",
+        "ambiguous": false,
+        "ambiguity": null,
+        "recurrence": null,
+        "warnings": [],
+        "reasons": [
+          "confidence 95% meets the auto-create threshold"
+        ],
+        "context_grounded": true,
+        "deadline_grounded": true,
+        "unknown_fields": [],
+        "counterparty_email": null
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "DOCUMENT_REQUEST",
+          "TASK",
+          "DEADLINE"
+        ],
+        "due_at": "2026-09-25T15:00:00Z",
+        "precision": "DATETIME",
+        "decision_in": [
+          "CREATE",
+          "REVIEW"
+        ]
+      },
+      "seconds": 14.42,
+      "attempts": 1,
+      "tokens": [
+        1323,
+        186
+      ]
+    },
+    {
+      "id": "ho-no-rush",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "decision": true,
+        "grounded": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "REVIEW",
+        "is_obligation": true,
+        "confidence": 0.7,
+        "confidence_raw": 0.7,
+        "type": "TASK",
+        "owner": "SELF",
+        "priority": "LOW",
+        "requires_confirmation": false,
+        "deadline_text": null,
+        "due_at": null,
+        "precision": null,
+        "ambiguous": false,
+        "ambiguity": "No deadline phrase was found in the message.",
+        "recurrence": null,
+        "warnings": [],
+        "reasons": [
+          "confidence 70% is below the auto-create threshold (85%)"
+        ],
+        "context_grounded": true,
+        "deadline_grounded": false,
+        "unknown_fields": [],
+        "counterparty_email": null
+      },
+      "expected": {
+        "decision_in": [
+          "CANDIDATE",
+          "REVIEW",
+          "IGNORE"
+        ]
+      },
+      "seconds": 16.14,
+      "attempts": 1,
+      "tokens": [
+        1320,
+        183
+      ]
+    },
+    {
+      "id": "ho-iso-pdt",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true,
+        "due": true,
+        "precision": true,
+        "type": true,
+        "grounded": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "CREATE",
+        "is_obligation": true,
+        "confidence": 0.95,
+        "confidence_raw": 0.95,
+        "type": "DEADLINE",
+        "owner": "SELF",
+        "priority": "HIGH",
+        "requires_confirmation": false,
+        "deadline_text": "2026-10-09 at 17:00 PDT",
+        "due_at": "2026-10-10T00:00:00+00:00",
+        "precision": "DATETIME",
+        "ambiguous": false,
+        "ambiguity": null,
+        "recurrence": null,
+        "warnings": [
+          "'PDT' was read as the regional timezone America/Los_Angeles (daylight saving aware)"
+        ],
+        "reasons": [
+          "confidence 95% meets the auto-create threshold"
+        ],
+        "context_grounded": true,
+        "deadline_grounded": true,
+        "unknown_fields": [],
+        "counterparty_email": null
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "TASK",
+          "DEADLINE"
+        ],
+        "due_at": "2026-10-10T00:00:00Z",
+        "precision": "DATETIME",
+        "decision_in": [
+          "CREATE",
+          "REVIEW"
+        ]
+      },
+      "seconds": 18.65,
+      "attempts": 1,
+      "tokens": [
+        1330,
+        199
+      ]
+    },
+    {
+      "id": "ho-two-asks",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true,
+        "due": true,
+        "type": true,
+        "grounded": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "CREATE",
+        "is_obligation": true,
+        "confidence": 0.95,
+        "confidence_raw": 0.95,
+        "type": "FOLLOW_UP",
+        "owner": "SELF",
+        "priority": "MEDIUM",
+        "requires_confirmation": true,
+        "deadline_text": "by Thursday",
+        "due_at": "2026-09-25T03:59:59+00:00",
+        "precision": "DATE",
+        "ambiguous": false,
+        "ambiguity": null,
+        "recurrence": null,
+        "warnings": [],
+        "reasons": [
+          "confidence 95% meets the auto-create threshold"
+        ],
+        "context_grounded": true,
+        "deadline_grounded": true,
+        "unknown_fields": [],
+        "counterparty_email": null
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "TASK",
+          "DEADLINE",
+          "DOCUMENT_REQUEST",
+          "FOLLOW_UP"
+        ],
+        "due_any_of": [
+          "2026-09-25T03:59:59Z",
+          "2026-10-03T03:59:59Z"
+        ],
+        "decision_in": [
+          "CREATE",
+          "REVIEW"
+        ]
+      },
+      "seconds": 16.75,
+      "attempts": 1,
+      "tokens": [
+        1328,
+        160
+      ]
+    },
+    {
+      "id": "ho-lease-renewal",
+      "passed": false,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true,
+        "due": true,
+        "precision": true,
+        "type": true,
+        "confirmation": false,
+        "grounded": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "CREATE",
+        "is_obligation": true,
+        "confidence": 0.95,
+        "confidence_raw": 0.95,
+        "type": "RENEWAL",
+        "owner": "SELF",
+        "priority": "HIGH",
+        "requires_confirmation": false,
+        "deadline_text": "by October 31, 2026",
+        "due_at": "2026-11-01T03:59:59+00:00",
+        "precision": "DATE",
+        "ambiguous": false,
+        "ambiguity": null,
+        "recurrence": null,
+        "warnings": [],
+        "reasons": [
+          "confidence 95% meets the auto-create threshold"
+        ],
+        "context_grounded": true,
+        "deadline_grounded": true,
+        "unknown_fields": [],
+        "counterparty_email": null
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "RENEWAL",
+          "TASK",
+          "DEADLINE",
+          "FOLLOW_UP",
+          "OTHER"
+        ],
+        "due_at": "2026-11-01T03:59:59Z",
+        "precision": "DATE",
+        "decision_in": [
+          "CREATE",
+          "REVIEW"
+        ],
+        "confirm": true
+      },
+      "seconds": 20.81,
+      "attempts": 1,
+      "tokens": [
+        1339,
+        185
+      ]
+    },
+    {
+      "id": "ho-interview-invite",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true,
+        "due": true,
+        "precision": true,
+        "type": true,
+        "confirmation": true,
+        "grounded": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "CREATE",
+        "is_obligation": true,
+        "confidence": 0.92,
+        "confidence_raw": 0.92,
+        "type": "INTERVIEW",
+        "owner": "SELF",
+        "priority": "HIGH",
+        "requires_confirmation": true,
+        "deadline_text": "Wednesday, October 7 at 2:30 PM ET",
+        "due_at": "2026-10-07T18:30:00+00:00",
+        "precision": "DATETIME",
+        "ambiguous": false,
+        "ambiguity": null,
+        "recurrence": null,
+        "warnings": [
+          "'ET' was read as the regional timezone America/New_York (daylight saving aware)"
+        ],
+        "reasons": [
+          "confidence 92% meets the auto-create threshold"
+        ],
+        "context_grounded": true,
+        "deadline_grounded": true,
+        "unknown_fields": [],
+        "counterparty_email": null
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "INTERVIEW",
+          "APPOINTMENT"
+        ],
+        "due_at": "2026-10-07T18:30:00Z",
+        "precision": "DATETIME",
+        "decision_in": [
+          "CREATE",
+          "REVIEW"
+        ],
+        "confirm": true
+      },
+      "seconds": 21.44,
+      "attempts": 1,
+      "tokens": [
+        1339,
+        202
+      ]
+    },
+    {
+      "id": "ho-overdue-notice",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true,
+        "due": true,
+        "type": true,
+        "grounded": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "REVIEW",
+        "is_obligation": true,
+        "confidence": 0.95,
+        "confidence_raw": 0.95,
+        "type": "PAYMENT",
+        "owner": "SELF",
+        "priority": "HIGH",
+        "requires_confirmation": false,
+        "deadline_text": "immediately",
+        "due_at": null,
+        "precision": null,
+        "ambiguous": false,
+        "ambiguity": "'immediately' is not a concrete deadline.",
+        "recurrence": null,
+        "warnings": [],
+        "reasons": [
+          "no concrete deadline was found"
+        ],
+        "context_grounded": true,
+        "deadline_grounded": true,
+        "unknown_fields": [],
+        "counterparty_email": null
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "PAYMENT",
+          "DEADLINE",
+          "TASK"
+        ],
+        "due_at": null,
+        "decision_in": [
+          "REVIEW"
+        ]
+      },
+      "seconds": 19.37,
+      "attempts": 1,
+      "tokens": [
+        1330,
+        200
+      ]
+    },
+    {
+      "id": "ho-flash-sale",
+      "passed": false,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": false,
+        "decision": false
+      },
+      "got": {
+        "status": "OK",
+        "decision": "CREATE",
+        "is_obligation": true,
+        "confidence": 0.95,
+        "confidence_raw": 0.95,
+        "type": "TASK",
+        "owner": "SELF",
+        "priority": "HIGH",
+        "requires_confirmation": false,
+        "deadline_text": "Friday at midnight",
+        "due_at": "2026-09-26T03:59:59+00:00",
+        "precision": "DATE",
+        "ambiguous": false,
+        "ambiguity": null,
+        "recurrence": null,
+        "warnings": [
+          "'midnight' was read as the end of that day"
+        ],
+        "reasons": [
+          "confidence 95% meets the auto-create threshold"
+        ],
+        "context_grounded": true,
+        "deadline_grounded": true,
+        "unknown_fields": [],
+        "counterparty_email": null
+      },
+      "expected": {
+        "is_obligation": false,
+        "decision_in": [
+          "IGNORE",
+          "CANDIDATE"
+        ]
+      },
+      "seconds": 16.66,
+      "attempts": 1,
+      "tokens": [
+        1324,
+        176
+      ]
+    },
+    {
+      "id": "ho-thanks-outbound",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "IGNORE",
+        "is_obligation": false,
+        "confidence": 0.97,
+        "confidence_raw": 0.97,
+        "type": "OTHER",
+        "owner": "SELF",
+        "priority": "LOW",
+        "requires_confirmation": false,
+        "deadline_text": null,
+        "due_at": null,
+        "precision": null,
+        "ambiguous": false,
+        "ambiguity": "No deadline phrase was found in the message.",
+        "recurrence": null,
+        "warnings": [],
+        "reasons": [
+          "the message does not contain an obligation"
+        ],
+        "context_grounded": false,
+        "deadline_grounded": false,
+        "unknown_fields": [],
+        "counterparty_email": null
+      },
+      "expected": {
+        "is_obligation": false,
+        "decision_in": [
+          "IGNORE"
+        ]
+      },
+      "seconds": 14.87,
+      "attempts": 1,
+      "tokens": [
+        1313,
+        152
+      ]
+    },
+    {
+      "id": "ho-outbound-attached",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "IGNORE",
+        "is_obligation": false,
+        "confidence": 0.7,
+        "confidence_raw": 0.7,
+        "type": "OTHER",
+        "owner": "SELF",
+        "priority": "LOW",
+        "requires_confirmation": false,
+        "deadline_text": null,
+        "due_at": null,
+        "precision": null,
+        "ambiguous": false,
+        "ambiguity": "No deadline phrase was found in the message.",
+        "recurrence": null,
+        "warnings": [],
+        "reasons": [
+          "the message does not contain an obligation"
+        ],
+        "context_grounded": false,
+        "deadline_grounded": false,
+        "unknown_fields": [],
+        "counterparty_email": null
+      },
+      "expected": {
+        "is_obligation": false,
+        "decision_in": [
+          "IGNORE",
+          "CANDIDATE"
+        ]
+      },
+      "seconds": 15.45,
+      "attempts": 1,
+      "tokens": [
+        1326,
+        158
+      ]
+    }
+  ],
+  "generated_at": "2026-09-25T04:59:03.124001+00:00"
+}

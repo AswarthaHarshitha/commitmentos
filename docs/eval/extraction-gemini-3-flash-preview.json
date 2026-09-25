@@ -1,0 +1,737 @@
+{
+  "summary": {
+    "provider": "gemini",
+    "model": "gemini-3-flash-preview",
+    "dataset_items": 35,
+    "items_run": 14,
+    "items_answered": 10,
+    "aborted": "LLM_QUOTA_EXHAUSTED after 14 items: The LLM provider's quota is exhausted (GenerateRequestsPerDayPerProjectPerModel-FreeTier); retrying will not help until it resets or the plan changes",
+    "passed": 10,
+    "per_check": {
+      "ambiguity": "5/5",
+      "confirmation": "1/1",
+      "contract": "10/10",
+      "decision": "10/10",
+      "due": "6/6",
+      "grounded": "6/6",
+      "is_obligation": "10/10",
+      "owner": "2/2",
+      "pipeline_ok": "10/14",
+      "precision": "6/6",
+      "type": "6/6"
+    },
+    "obligation_detection": {
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "tn": 4,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "latency_seconds": {
+      "mean": 8.23,
+      "p95": 15.69,
+      "max": 17.13
+    },
+    "repair_retries": 0,
+    "tokens": {
+      "input": 10028,
+      "output": 2048
+    },
+    "auto_created_wrongly": []
+  },
+  "results": [
+    {
+      "id": "req-friday-5pm",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true,
+        "due": true,
+        "precision": true,
+        "ambiguity": true,
+        "type": true,
+        "owner": true,
+        "grounded": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "CREATE",
+        "is_obligation": true,
+        "confidence": 0.95,
+        "confidence_raw": 0.95,
+        "type": "DOCUMENT_REQUEST",
+        "owner": "SELF",
+        "priority": "HIGH",
+        "requires_confirmation": false,
+        "deadline_text": "by Friday 5pm",
+        "due_at": "2026-09-25T21:00:00+00:00",
+        "precision": "DATETIME",
+        "ambiguous": false,
+        "ambiguity": null,
+        "recurrence": null,
+        "warnings": [
+          "1 entity value(s) not found in the message were dropped"
+        ],
+        "reasons": [
+          "confidence 95% meets the auto-create threshold"
+        ],
+        "context_grounded": true,
+        "deadline_grounded": true,
+        "unknown_fields": [],
+        "counterparty_email": "priya@northwind-example.com"
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "DOCUMENT_REQUEST",
+          "TASK",
+          "DEADLINE"
+        ],
+        "due_at": "2026-09-25T21:00:00Z",
+        "precision": "DATETIME",
+        "ambiguous": false,
+        "decision_in": [
+          "CREATE"
+        ],
+        "owner": "SELF"
+      },
+      "seconds": 10.03,
+      "attempts": 1,
+      "tokens": [
+        1008,
+        173
+      ]
+    },
+    {
+      "id": "req-tomorrow-noon",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true,
+        "due": true,
+        "precision": true,
+        "ambiguity": true,
+        "type": true,
+        "grounded": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "CREATE",
+        "is_obligation": true,
+        "confidence": 0.95,
+        "confidence_raw": 0.95,
+        "type": "DOCUMENT_REQUEST",
+        "owner": "SELF",
+        "priority": "HIGH",
+        "requires_confirmation": false,
+        "deadline_text": "by tomorrow noon",
+        "due_at": "2026-09-24T16:00:00+00:00",
+        "precision": "DATETIME",
+        "ambiguous": false,
+        "ambiguity": null,
+        "recurrence": null,
+        "warnings": [],
+        "reasons": [
+          "confidence 95% meets the auto-create threshold"
+        ],
+        "context_grounded": true,
+        "deadline_grounded": true,
+        "unknown_fields": [],
+        "counterparty_email": "marcus@example.org"
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "TASK",
+          "DOCUMENT_REQUEST",
+          "DEADLINE"
+        ],
+        "due_at": "2026-09-24T16:00:00Z",
+        "precision": "DATETIME",
+        "ambiguous": false,
+        "decision_in": [
+          "CREATE",
+          "REVIEW"
+        ]
+      },
+      "seconds": 6.06,
+      "attempts": 1,
+      "tokens": [
+        987,
+        160
+      ]
+    },
+    {
+      "id": "pay-invoice-explicit",
+      "passed": false,
+      "checks": {
+        "pipeline_ok": false
+      },
+      "got": {
+        "status": "LLM_UNAVAILABLE",
+        "error": "The LLM service returned 503"
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "PAYMENT"
+        ],
+        "due_at": "2026-10-16T03:59:59Z",
+        "precision": "DATE",
+        "ambiguous": false,
+        "decision_in": [
+          "CREATE"
+        ]
+      },
+      "seconds": 8.36,
+      "attempts": 1,
+      "tokens": [
+        null,
+        null
+      ]
+    },
+    {
+      "id": "appt-tomorrow-1030",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true,
+        "due": true,
+        "precision": true,
+        "ambiguity": true,
+        "type": true,
+        "grounded": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "CREATE",
+        "is_obligation": true,
+        "confidence": 0.98,
+        "confidence_raw": 0.98,
+        "type": "APPOINTMENT",
+        "owner": "SELF",
+        "priority": "MEDIUM",
+        "requires_confirmation": false,
+        "deadline_text": "tomorrow at 10:30 AM",
+        "due_at": "2026-09-24T14:30:00+00:00",
+        "precision": "DATETIME",
+        "ambiguous": false,
+        "ambiguity": null,
+        "recurrence": null,
+        "warnings": [],
+        "reasons": [
+          "confidence 98% meets the auto-create threshold"
+        ],
+        "context_grounded": true,
+        "deadline_grounded": true,
+        "unknown_fields": [],
+        "counterparty_email": "frontdesk@maple-clinic-example.com"
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "APPOINTMENT"
+        ],
+        "due_at": "2026-09-24T14:30:00Z",
+        "precision": "DATETIME",
+        "ambiguous": false,
+        "decision_in": [
+          "CREATE"
+        ]
+      },
+      "seconds": 15.69,
+      "attempts": 1,
+      "tokens": [
+        1006,
+        301
+      ]
+    },
+    {
+      "id": "sub-renews-next-month",
+      "passed": false,
+      "checks": {
+        "pipeline_ok": false
+      },
+      "got": {
+        "status": "LLM_UNAVAILABLE",
+        "error": "The LLM service returned 429"
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "RENEWAL",
+          "DEADLINE",
+          "OTHER",
+          "TASK"
+        ],
+        "due_at": "2026-10-02T03:59:59Z",
+        "ambiguous": true,
+        "decision_in": [
+          "REVIEW",
+          "CANDIDATE"
+        ]
+      },
+      "seconds": 6.54,
+      "attempts": 1,
+      "tokens": [
+        null,
+        null
+      ]
+    },
+    {
+      "id": "return-window-2days",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true,
+        "due": true,
+        "precision": true,
+        "ambiguity": true,
+        "type": true,
+        "grounded": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "CREATE",
+        "is_obligation": true,
+        "confidence": 0.95,
+        "confidence_raw": 0.95,
+        "type": "RETURN",
+        "owner": "SELF",
+        "priority": "HIGH",
+        "requires_confirmation": false,
+        "deadline_text": "in 2 days",
+        "due_at": "2026-09-26T03:59:59+00:00",
+        "precision": "DATE",
+        "ambiguous": false,
+        "ambiguity": null,
+        "recurrence": null,
+        "warnings": [
+          "1 entity value(s) not found in the message were dropped"
+        ],
+        "reasons": [
+          "confidence 95% meets the auto-create threshold"
+        ],
+        "context_grounded": true,
+        "deadline_grounded": true,
+        "unknown_fields": [],
+        "counterparty_email": "orders@shopnorth-example.com"
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "RETURN",
+          "DEADLINE",
+          "TASK"
+        ],
+        "due_at": "2026-09-26T03:59:59Z",
+        "precision": "DATE",
+        "ambiguous": false,
+        "decision_in": [
+          "CREATE",
+          "REVIEW"
+        ]
+      },
+      "seconds": 17.13,
+      "attempts": 1,
+      "tokens": [
+        1002,
+        172
+      ]
+    },
+    {
+      "id": "interview-confirm",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true,
+        "due": true,
+        "precision": true,
+        "ambiguity": true,
+        "type": true,
+        "confirmation": true,
+        "grounded": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "CREATE",
+        "is_obligation": true,
+        "confidence": 0.95,
+        "confidence_raw": 0.95,
+        "type": "INTERVIEW",
+        "owner": "SELF",
+        "priority": "HIGH",
+        "requires_confirmation": true,
+        "deadline_text": "by Thursday",
+        "due_at": "2026-09-25T03:59:59+00:00",
+        "precision": "DATE",
+        "ambiguous": false,
+        "ambiguity": null,
+        "recurrence": null,
+        "warnings": [],
+        "reasons": [
+          "confidence 95% meets the auto-create threshold"
+        ],
+        "context_grounded": true,
+        "deadline_grounded": true,
+        "unknown_fields": [],
+        "counterparty_email": "talent@orbital-labs-example.com"
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "INTERVIEW",
+          "TASK",
+          "DEADLINE"
+        ],
+        "due_at": "2026-09-25T03:59:59Z",
+        "precision": "DATE",
+        "ambiguous": false,
+        "decision_in": [
+          "CREATE",
+          "REVIEW"
+        ],
+        "confirm": true
+      },
+      "seconds": 3.99,
+      "attempts": 1,
+      "tokens": [
+        1006,
+        250
+      ]
+    },
+    {
+      "id": "others-promise",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true,
+        "due": true,
+        "precision": true,
+        "type": true,
+        "owner": true,
+        "grounded": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "CREATE",
+        "is_obligation": true,
+        "confidence": 0.95,
+        "confidence_raw": 0.95,
+        "type": "FOLLOW_UP",
+        "owner": "OTHER",
+        "priority": "MEDIUM",
+        "requires_confirmation": false,
+        "deadline_text": "by Monday",
+        "due_at": "2026-09-29T03:59:59+00:00",
+        "precision": "DATE",
+        "ambiguous": false,
+        "ambiguity": null,
+        "recurrence": null,
+        "warnings": [
+          "1 entity value(s) not found in the message were dropped"
+        ],
+        "reasons": [
+          "confidence 95% meets the auto-create threshold"
+        ],
+        "context_grounded": true,
+        "deadline_grounded": true,
+        "unknown_fields": [],
+        "counterparty_email": "jordan@example.net"
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "FOLLOW_UP",
+          "TASK",
+          "DEADLINE",
+          "PERSONAL_COMMITMENT",
+          "OTHER"
+        ],
+        "due_at": "2026-09-29T03:59:59Z",
+        "precision": "DATE",
+        "decision_in": [
+          "CREATE",
+          "REVIEW"
+        ],
+        "owner": "OTHER"
+      },
+      "seconds": 2.92,
+      "attempts": 1,
+      "tokens": [
+        997,
+        158
+      ]
+    },
+    {
+      "id": "own-promise-outbound",
+      "passed": false,
+      "checks": {
+        "pipeline_ok": false
+      },
+      "got": {
+        "status": "LLM_UNAVAILABLE",
+        "error": "The LLM service returned 503"
+      },
+      "expected": {
+        "is_obligation": true,
+        "type_any": [
+          "PERSONAL_COMMITMENT",
+          "TASK",
+          "DEADLINE",
+          "FOLLOW_UP",
+          "DOCUMENT_REQUEST"
+        ],
+        "due_at": "2026-09-29T03:59:59Z",
+        "precision": "DATE",
+        "decision_in": [
+          "CREATE",
+          "REVIEW"
+        ],
+        "owner": "SELF"
+      },
+      "seconds": 19.7,
+      "attempts": 1,
+      "tokens": [
+        null,
+        null
+      ]
+    },
+    {
+      "id": "newsletter",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "IGNORE",
+        "is_obligation": false,
+        "confidence": 0.98,
+        "confidence_raw": 0.98,
+        "type": "OTHER",
+        "owner": "SELF",
+        "priority": "LOW",
+        "requires_confirmation": false,
+        "deadline_text": null,
+        "due_at": null,
+        "precision": null,
+        "ambiguous": false,
+        "ambiguity": "No deadline phrase was found in the message.",
+        "recurrence": null,
+        "warnings": [
+          "1 entity value(s) not found in the message were dropped"
+        ],
+        "reasons": [
+          "the message does not contain an obligation"
+        ],
+        "context_grounded": false,
+        "deadline_grounded": false,
+        "unknown_fields": [],
+        "counterparty_email": "news@digest-example.com"
+      },
+      "expected": {
+        "is_obligation": false,
+        "decision_in": [
+          "IGNORE"
+        ]
+      },
+      "seconds": 12.61,
+      "attempts": 1,
+      "tokens": [
+        1023,
+        207
+      ]
+    },
+    {
+      "id": "promo-ends-friday",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "IGNORE",
+        "is_obligation": false,
+        "confidence": 0.98,
+        "confidence_raw": 0.98,
+        "type": "OTHER",
+        "owner": "SELF",
+        "priority": "LOW",
+        "requires_confirmation": false,
+        "deadline_text": null,
+        "due_at": null,
+        "precision": null,
+        "ambiguous": false,
+        "ambiguity": "No deadline phrase was found in the message.",
+        "recurrence": null,
+        "warnings": [
+          "1 entity value(s) not found in the message were dropped"
+        ],
+        "reasons": [
+          "the message does not contain an obligation"
+        ],
+        "context_grounded": false,
+        "deadline_grounded": false,
+        "unknown_fields": [],
+        "counterparty_email": "promo@shopnorth-example.com"
+      },
+      "expected": {
+        "is_obligation": false,
+        "decision_in": [
+          "IGNORE",
+          "CANDIDATE"
+        ]
+      },
+      "seconds": 3.27,
+      "attempts": 1,
+      "tokens": [
+        992,
+        234
+      ]
+    },
+    {
+      "id": "shipping-notice",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "IGNORE",
+        "is_obligation": false,
+        "confidence": 0.98,
+        "confidence_raw": 0.98,
+        "type": "OTHER",
+        "owner": "OTHER",
+        "priority": "LOW",
+        "requires_confirmation": false,
+        "deadline_text": null,
+        "due_at": null,
+        "precision": null,
+        "ambiguous": false,
+        "ambiguity": "No deadline phrase was found in the message.",
+        "recurrence": null,
+        "warnings": [
+          "1 entity value(s) not found in the message were dropped"
+        ],
+        "reasons": [
+          "the message does not contain an obligation"
+        ],
+        "context_grounded": false,
+        "deadline_grounded": false,
+        "unknown_fields": [],
+        "counterparty_email": "orders@shopnorth-example.com"
+      },
+      "expected": {
+        "is_obligation": false,
+        "decision_in": [
+          "IGNORE",
+          "CANDIDATE"
+        ]
+      },
+      "seconds": 5.16,
+      "attempts": 1,
+      "tokens": [
+        1002,
+        233
+      ]
+    },
+    {
+      "id": "receipt",
+      "passed": true,
+      "checks": {
+        "pipeline_ok": true,
+        "contract": true,
+        "is_obligation": true,
+        "decision": true
+      },
+      "got": {
+        "status": "OK",
+        "decision": "IGNORE",
+        "is_obligation": false,
+        "confidence": 0.98,
+        "confidence_raw": 0.98,
+        "type": "OTHER",
+        "owner": "SELF",
+        "priority": "LOW",
+        "requires_confirmation": false,
+        "deadline_text": null,
+        "due_at": null,
+        "precision": null,
+        "ambiguous": false,
+        "ambiguity": "No deadline phrase was found in the message.",
+        "recurrence": null,
+        "warnings": [
+          "1 entity value(s) not found in the message were dropped"
+        ],
+        "reasons": [
+          "the message does not contain an obligation"
+        ],
+        "context_grounded": false,
+        "deadline_grounded": false,
+        "unknown_fields": [],
+        "counterparty_email": "receipts@cafe-luna-example.com"
+      },
+      "expected": {
+        "is_obligation": false,
+        "decision_in": [
+          "IGNORE"
+        ]
+      },
+      "seconds": 5.41,
+      "attempts": 1,
+      "tokens": [
+        1005,
+        160
+      ]
+    },
+    {
+      "id": "social",
+      "passed": false,
+      "checks": {
+        "pipeline_ok": false
+      },
+      "got": {
+        "status": "LLM_QUOTA_EXHAUSTED",
+        "error": "The LLM provider's quota is exhausted (GenerateRequestsPerDayPerProjectPerModel-FreeTier); retrying will not help until it resets or the plan changes"
+      },
+      "expected": {
+        "is_obligation": false,
+        "decision_in": [
+          "IGNORE",
+          "CANDIDATE"
+        ]
+      },
+      "seconds": 0.68,
+      "attempts": 1,
+      "tokens": [
+        null,
+        null
+      ]
+    }
+  ],
+  "generated_at": "2026-09-24T14:03:27.506127+00:00"
+}
