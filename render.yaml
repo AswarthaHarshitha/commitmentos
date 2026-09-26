@@ -1,0 +1,126 @@
+# Render Blueprint: the API and n8n as two Docker web services on Render's free plan.
+# The database is NOT Render's own free Postgres (which expires after 30 days) - use a separate free
+# Postgres provider (Neon, which does not expire) and paste its connection details into the `sync: false`
+# fields below when Render prompts for them. See docs/deployment.md for the full, ordered walkthrough.
+#
+# Two fields (N8N_INBOUND_SECRET, N8N_OUTBOUND_SECRET) are shared secrets that must hold the SAME value on
+# BOTH services - Render Blueprints don't offer a verified way to copy an arbitrary custom secret from one
+# service to another, so generate each once yourself (e.g. `openssl rand -hex 24`) and paste it into both.
+services:
+  - type: web
+    name: commitmentos-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: ./apps/api
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: PUBLIC_WEB_URL # the deployed frontend's URL (Vercel gives you this after step 3 - deploy the API first with a
+        sync: false # placeholder, then come back and set the real value, then redeploy)
+      - key: DATABASE_URL # Neon's connection string, with postgresql+psycopg:// as the scheme (psycopg3, not psycopg2)
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: ALLOW_REGISTRATION # set to "false" once your own account exists, so the deployed app isn't an open sign-up page
+        value: "true"
+      - key: CORS_ORIGINS # the same frontend URL as PUBLIC_WEB_URL
+        sync: false
+      - key: N8N_INBOUND_SECRET # generate once, paste the SAME value here and on commitmentos-n8n
+        sync: false
+      - key: N8N_OUTBOUND_SECRET # generate once, paste the SAME value here and on commitmentos-n8n
+        sync: false
+      - key: N8N_BASE_URL # https://commitmentos-n8n.onrender.com (your actual n8n service's Render URL)
+        sync: false
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: GEMINI_API_KEY # a Google AI Studio key; leave unset (LLM_PROVIDER=none) if you don't have one yet
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_THINKING_BUDGET
+        value: "0"
+      - key: NOTIFY_FROM_EMAIL
+        sync: false
+      - key: SMTP_HOST # e.g. smtp.gmail.com; leave unset and email is caught by the (unreachable, harmless) default
+        sync: false
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_SECURE
+        value: "true"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD # an app password, never your real account password
+        sync: false
+      - key: CALENDAR_PROVIDER
+        value: local
+
+  - type: web
+    name: commitmentos-n8n
+    runtime: docker
+    plan: free
+    dockerfilePath: ./automation/n8n/Dockerfile
+    dockerContext: ./automation/n8n
+    healthCheckPath: /healthz
+    envVars:
+      - key: COMMITMENTOS_API_URL # your actual commitmentos-api Render URL, e.g. https://commitmentos-api.onrender.com
+        sync: false
+      - key: DB_TYPE
+        value: postgresdb
+      - key: DB_POSTGRESDB_HOST # Neon's host, e.g. ep-xxxx.region.aws.neon.tech (host only, not the full URL)
+        sync: false
+      - key: DB_POSTGRESDB_PORT
+        value: "5432"
+      - key: DB_POSTGRESDB_DATABASE # a SEPARATE database from the API's - e.g. "n8n" (create it once via Neon's SQL editor:
+        sync: false # `CREATE DATABASE n8n;`), never the same database as commitmentos-api
+      - key: DB_POSTGRESDB_USER
+        sync: false
+      - key: DB_POSTGRESDB_PASSWORD
+        sync: false
+      - key: DB_POSTGRESDB_SSL_ENABLED
+        value: "true"
+      - key: N8N_ENCRYPTION_KEY
+        generateValue: true
+      - key: N8N_INBOUND_SECRET # the SAME value you pasted into commitmentos-api
+        sync: false
+      - key: N8N_OUTBOUND_SECRET # the SAME value you pasted into commitmentos-api
+        sync: false
+      - key: N8N_HOST # commitmentos-n8n.onrender.com (host only, no scheme)
+        sync: false
+      - key: N8N_PORT
+        value: "5678"
+      - key: N8N_PROTOCOL
+        value: https
+      - key: N8N_WEBHOOK_URL # https://commitmentos-n8n.onrender.com/ (your actual n8n service's Render URL, trailing slash)
+        sync: false
+      - key: N8N_PROXY_HOPS # Render terminates TLS at one edge proxy in front of the container
+        value: "1"
+      - key: GENERIC_TIMEZONE
+        value: UTC
+      - key: TZ
+        value: UTC
+      - key: N8N_DIAGNOSTICS_ENABLED
+        value: "false"
+      - key: N8N_VERSION_NOTIFICATIONS_ENABLED
+        value: "false"
+      - key: N8N_PERSONALIZATION_ENABLED
+        value: "false"
+      - key: N8N_TEMPLATES_ENABLED
+        value: "false"
+      - key: N8N_SAVE_SUCCESS_EXECUTIONS # keep no message content from successful runs; failed runs still keep 72h for retrying
+        value: "none"
+      - key: SMTP_HOST # must match commitmentos-api's SMTP_HOST (consumed once, at import, to build the SMTP credential)
+        sync: false
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_SECURE
+        value: "true"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false

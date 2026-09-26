@@ -105,6 +105,18 @@ services:
       retries: 20
       start_period: 10s
 
+  web:
+    build:
+      context: ./apps/web
+      args:
+        API_URL: http://api:8000
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
+
   # One-shot job: loads credentials (generated from env, never committed) and workflows into n8n's database
   # BEFORE n8n starts, so the workflows come up active and wired with no manual clicking.
   n8n-import:
