@@ -1,14 +1,17 @@
 # A single deployable n8n image for platforms that run one process per service (no separate init container,
 # unlike the local Docker Compose stack, which runs `import.sh` as its own one-shot `n8n-import` service).
 #
-# At boot, import.sh rebuilds workflows/*.json against COMMITMENTOS_API_URL from the container's own runtime
-# environment (an ordinary env var - see import.sh), imports credentials and the freshly-built workflows, then
-# publishes (activates) each one, before handing off to n8n's own entrypoint - so triggers are live the moment
-# the health check passes. import.sh is safe to re-run (n8n's import commands upsert by id), so this also runs
-# correctly on every restart.
+# n8n starts FIRST, in the foreground under tini (proper PID 1 / signal handling), so the container's port opens
+# within seconds - most PaaS platforms (Render included) detect the listening port during a bounded window early
+# in the deploy and give up if nothing is listening yet, and importing eight workflows one at a time (each an n8n
+# CLI invocation - a full process start) can take several minutes on a free-tier CPU, comfortably outrunning that
+# window if it ran first. import.sh (credentials, then the freshly-built workflows, then activating each one) runs
+# concurrently in the background instead, once n8n's own local health check answers; start.sh forwards SIGTERM so
+# a redeploy stops cleanly. import.sh is safe to re-run (n8n's import commands upsert by id), so this is also
+# correct on every restart, and safe to run alongside n8n's own startup migration (both take the same DB lock).
 FROM n8nio/n8n:2.40.6
 USER root
 COPY . /automation
-RUN chmod +x /automation/import.sh && chown -R node:node /automation
+RUN chmod +x /automation/import.sh /automation/start.sh && chown -R node:node /automation
 USER node
-ENTRYPOINT ["/bin/sh", "-c", "/automation/import.sh && exec tini -- /docker-entrypoint.sh"]
+ENTRYPOINT ["/bin/sh", "/automation/start.sh"]
