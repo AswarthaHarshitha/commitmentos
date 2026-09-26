@@ -14,4 +14,5 @@ USER root
 COPY . /automation
 RUN chmod +x /automation/import.sh /automation/start.sh && chown -R node:node /automation
 USER node
-ENTRYPOINT ["/bin/sh", "/automation/start.sh"]
+# tini is PID 1 here (not nested inside start.sh) so it can reap n8n and import.sh's children properly.
+ENTRYPOINT ["tini", "-g", "--", "/bin/sh", "/automation/start.sh"]

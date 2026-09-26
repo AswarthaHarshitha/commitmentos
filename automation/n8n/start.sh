@@ -1,9 +1,12 @@
 #!/bin/sh
-# Container entrypoint (see Dockerfile for why): start n8n immediately so the port opens fast, then run the
-# import in the background once n8n answers its own local health check.
+# Runs as tini's direct child (tini itself is PID 1 - see the Dockerfile's ENTRYPOINT - so it can reap n8n and
+# import.sh's children properly; this script must not start another tini of its own).
+#
+# Starts n8n immediately so the port opens fast, then runs the import in the background once n8n answers its
+# own local health check.
 set -eu
 
-tini -- /docker-entrypoint.sh &
+/docker-entrypoint.sh &
 N8N_PID=$!
 trap 'kill -TERM "$N8N_PID" 2>/dev/null; wait "$N8N_PID" 2>/dev/null' TERM INT
 
