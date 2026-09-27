@@ -141,20 +141,20 @@ model -> validation -> Postgres -> the commitment in the UI) without needing Gma
   in practice at least one will spend part of the month asleep.
 - **Neon's free compute suspends after 5 minutes of inactivity** and resumes in a few hundred milliseconds on the
   next query - a brief, usually unnoticeable delay, unlike Render's ~1-minute cold start.
-- **Waking `commitmentos-n8n` from a cold start takes several minutes, not seconds - and can occasionally restart
-  mid-way through.** Activating a workflow only writes the database - it does not reach n8n's already-running
-  process - so n8n has to import and activate all eight workflows and then start completely fresh before any of
-  them really work; each activation is its own n8n CLI process, and that is slow (often 5-10+ minutes end to end)
-  on a free, shared CPU. A tiny proxy (`automation/n8n/proxy.js`) holds the external port the entire time so the
-  platform's own port and health checks see the service as alive throughout, rather than timing out and failing
-  the deploy outright (what an earlier version of this image did). Verified live: this took it from a permanent,
-  continuous restart loop that never once finished importing, to importing successfully most of the time - but on
-  an extremely constrained free CPU, a busy moment (n8n's own boot, or one of the eight activations) can still
-  delay even this lightweight proxy long enough to miss the platform's own health check, and depending on exactly
-  how that lands, the instance sometimes recovers on its own within seconds and sometimes is restarted and has to
-  import all eight again from scratch. Either way is self-healing (nothing is corrupted; the same, idempotent
-  import just runs again), but a restart here means another several-minute wait before the automation engine
-  works. This is the honest, current shape of the trade-off on a genuinely free, CPU-scarce tier; a paid tier with
-  a dedicated CPU share would not have it.
+- **Waking `commitmentos-n8n` from a cold start takes several minutes, not seconds.** Activating a workflow only
+  writes the database - it does not reach n8n's already-running process - so n8n has to import and activate all
+  eight workflows and then start completely fresh before any of them really work; each activation is its own n8n
+  CLI process, and that is slow (often 5-10+ minutes end to end) on a free, shared CPU. A tiny proxy
+  (`automation/n8n/proxy.js`) holds the external port the entire time so the platform's own port and health checks
+  see the service as alive throughout, rather than timing out and failing the deploy outright (what an earlier
+  version of this image did). The proxy answers `/healthz` itself, immediately, and never forwards it to n8n -
+  an earlier version forwarded `/healthz` through to n8n once n8n was reachable, which meant a momentary stall in
+  n8n's own event loop (seen live, alongside overlapping DB queries during startup) could push a single health
+  check past the platform's 5-second deadline and get an otherwise-healthy instance restarted. Verified live: with
+  the direct-answer proxy, a deploy ran for 15+ minutes without a single restart, including through a real,
+  logged database connection timeout that n8n recovered from on its own - the platform's health check never saw
+  it, because it no longer depends on n8n's own responsiveness. This is a real, durable fix, not just a reduction
+  in odds; the remaining cost is purely the several-minute wait itself, which a paid tier with a dedicated CPU
+  share would shorten but which this fix does not attempt to shorten.
 - **Telegram delivery** needs its own bot token (`TELEGRAM_BOT_TOKEN`), not covered above; the code path exists and
   fails safe (never reported as sent) without one.
