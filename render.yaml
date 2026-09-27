@@ -92,8 +92,8 @@ services:
         sync: false
       - key: N8N_HOST # commitmentos-n8n.onrender.com (host only, no scheme)
         sync: false
-      - key: N8N_PORT
-        value: "5678"
+      - key: PORT # the external port Render should route to; start.sh's proxy holds this one, n8n itself binds a
+        value: "5678" # different, internal port (see start.sh) - leave this at 5678 unless you also change that
       - key: N8N_PROTOCOL
         value: https
       - key: N8N_WEBHOOK_URL # https://commitmentos-n8n.onrender.com/ (your actual n8n service's Render URL, trailing slash)
