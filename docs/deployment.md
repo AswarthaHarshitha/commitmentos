@@ -141,5 +141,14 @@ model -> validation -> Postgres -> the commitment in the UI) without needing Gma
   in practice at least one will spend part of the month asleep.
 - **Neon's free compute suspends after 5 minutes of inactivity** and resumes in a few hundred milliseconds on the
   next query - a brief, usually unnoticeable delay, unlike Render's ~1-minute cold start.
+- **Waking `commitmentos-n8n` from a cold start takes several minutes, not seconds.** Activating a workflow only
+  writes the database - it does not reach n8n's already-running process - so n8n has to import and activate all
+  eight workflows and then start completely fresh before any of them really work; each activation is its own n8n
+  CLI process, and that is slow on a free, shared CPU. A tiny proxy (`automation/n8n/proxy.js`) holds the external
+  port the entire time so the platform's own port and health checks see the service as alive throughout, rather
+  than timing out and failing the deploy outright (what an earlier version of this image did). On an extremely
+  constrained free CPU, that proxy can itself be delayed for a few seconds at the single busiest moment - n8n
+  finishing its own boot - which could in the worst case show up as one isolated health-check miss; unlike the
+  continuous failure this replaced, it is brief, rare, and self-resolving.
 - **Telegram delivery** needs its own bot token (`TELEGRAM_BOT_TOKEN`), not covered above; the code path exists and
   fails safe (never reported as sent) without one.
