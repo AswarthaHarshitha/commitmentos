@@ -7,6 +7,13 @@
 // it. Traffic here is small JSON (health checks, and our own API's webhook calls), never a large upload or a
 // long-lived stream, so buffering each request and response whole is simpler than piping and is not a
 // meaningful cost.
+//
+// /healthz is answered by this process directly, never forwarded to n8n: the platform's health check only needs
+// to know the container itself is alive and listening, which is true the moment this process starts - forwarding
+// it instead would tie a 5-second platform deadline to n8n's own response latency (event loop contention during
+// its internal task broker / DB work can occasionally push even a healthy n8n past 5 seconds), which caused a
+// live restart of an otherwise-fine, fully-booted instance. Every other path still forwards through to n8n
+// unchanged, since real callers (our own API's webhook) need n8n's real state, not a synthetic one.
 'use strict';
 
 const http = require('node:http');
@@ -28,6 +35,12 @@ function readBody(req) {
 }
 
 const server = http.createServer(async (req, res) => {
+  if (req.url === '/healthz') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end('{"status":"alive"}');
+    return;
+  }
+
   let body;
   try {
     body = await readBody(req);
@@ -48,13 +61,8 @@ const server = http.createServer(async (req, res) => {
   upstream.on('error', () => {
     if (res.headersSent) return;
     // n8n is not reachable yet (still importing) or between its own restarts - never claim more than that.
-    if (req.url === '/healthz') {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end('{"status":"starting"}');
-    } else {
-      res.writeHead(503);
-      res.end('still starting');
-    }
+    res.writeHead(503);
+    res.end('still starting');
   });
   upstream.end(body);
 });
