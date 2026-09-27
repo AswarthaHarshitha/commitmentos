@@ -101,10 +101,10 @@ services:
       - key: N8N_PROXY_HOPS # Render terminates TLS at one edge proxy in front of the container
         value: "1"
       # n8n pings its own database every 2s with a 5s timeout by default, and declares it "down" (forcing a
-      # reconnect) after 3 misses in a row - a real bug upstream (n8n-io/n8n#39645): a normal moment of CPU
-      # contention (this container also runs the workflow import concurrently at boot) can delay Node's event
-      # loop past that timeout even though the database replied fine, tripping a false "down" verdict. Much
-      # more headroom here avoids that on a free, shared, easily-contended CPU.
+      # reconnect) after 3 misses in a row - there is a real upstream bug (n8n-io/n8n#39645) where the ping and
+      # its timeout race on the same event loop, so a moment of delay (a shared, noisy-neighbour free-tier CPU,
+      # or the database's own free-tier compute waking from suspend) can be mistaken for the database being down
+      # even though it replied fine. More headroom here is cheap insurance against that.
       - key: DB_PING_TIMEOUT_MS
         value: "20000"
       - key: DB_PING_MAX_FAILURES_BEFORE_RECOVERY
