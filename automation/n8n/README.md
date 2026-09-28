@@ -75,12 +75,40 @@ node --test automation/n8n/tests/*.test.js
 * **Failure text is scrubbed** (`code/_common.js`): tokens are redacted, and an HTTP error's echoed request body - which can
   quote an email - is reduced to the status and the API's own error code.
 * **`--activeState=fromJson` only works in queue mode**, so `import.sh` publishes each workflow explicitly.
-* **n8n stores execution data (message text) for inspection and retry.** Failed runs keep theirs for 72 h; successful runs keep nothing by default (`N8N_SAVE_SUCCESS_EXECUTIONS=none`); for a real
-  mailbox set `N8N_SAVE_SUCCESS_EXECUTIONS=none` (`.env.example`).
+* **n8n stores execution data (message text) for inspection and retry.** Failed runs keep theirs for 72 h; successful runs
+  keep nothing by default (`N8N_SAVE_SUCCESS_EXECUTIONS=none`, set in `.env.example` and `render.yaml`).
+
+## Inspecting executions
+
+Open n8n's editor (`http://localhost:5678` locally; the first visit asks you to create the owner account, so do that
+before exposing it anywhere) and use **Executions**. Each row in the app's *Automation Activity* page carries n8n's own
+execution id, so the two can be cross-checked. Failed executions keep their data for 72 hours.
+
+## Connecting Gmail
+
+The Gmail Trigger (`Commitment Detection` workflow, polling `INBOX` every minute) ships **disabled and unconnected**.
+It is **NOT VERIFIED** - it needs a Google credential that only you can create.
+
+1. In the Google Cloud console create a project and enable the **Gmail API**.
+2. Configure the **OAuth consent screen**. While the app is in *Testing* only the test users you list can authorize it,
+   and Google expires refresh tokens issued to testing apps after 7 days.
+3. Create an **OAuth client ID** (type *Web application*). Its authorized redirect URI is the *OAuth Redirect URL* that
+   n8n shows in the credential dialog (`https://<your n8n host>/rest/oauth2-credential/callback`).
+4. In n8n: **Credentials -> New -> Gmail OAuth2 API**, paste the client ID and secret, and sign in with Google.
+5. In `definitions/incoming-detection.js` set `disabled: false` on `Gmail Trigger` and replace the placeholder address in
+   the `Mailbox owner` node with the email of the CommitmentOS account that owns the mailbox, then rebuild
+   (`node automation/n8n/build.js`) and reload.
+
+Step 5 is in the source rather than the editor because `import.sh` re-imports every workflow from source on each start,
+which overwrites edits made in the editor. Credentials you create in the editor are not overwritten (only the three
+fixed-id credentials from `make-credentials.js` are upserted), but the trigger node in source does not reference one, so
+selecting it on the node in the editor is also lost on re-import. Making Gmail ingestion durable therefore needs the
+credential's id wired into the definition; that is not done. Until then, real mail reaches the same pipeline through
+**Import an email** in the app and the `commitmentos-ingest` webhook.
 
 ## What is verified, and what is not
 
-Verified against the running stack by `e2e/` (31 tests: real n8n executions, real SMTP into Mailpit, real API and database):
+Verified against the running stack by `e2e/` (33 tests: real n8n executions, real SMTP into Mailpit, real API and database):
 ingestion end to end; duplicate detection before the LLM call; the same words resolving to different instants in different
 timezones; the full 24h / 6h / overdue / escalated ladder driven by the test clock, each rung once, nothing after completion;
 retry of a flaky LLM; a permanently unavailable LLM (visible failure, later retry of the same message); malformed and

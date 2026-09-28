@@ -49,7 +49,7 @@ while it is asleep - this is stated plainly rather than glossed over.
    - `GEMINI_API_KEY` - a [Google AI Studio](https://aistudio.google.com/apikey) key, if you have one; otherwise
      leave it empty and set `LLM_PROVIDER=none` (extraction is then recorded as a visible failure instead of
      silently guessing - see `docs/architecture.md`).
-   - `NOTIFY_FROM_EMAIL`, `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` - a real account to send from (see step 5),
+   - `NOTIFY_FROM_EMAIL`, `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` - a real account to send from (see step 6),
      or leave empty for now.
 4. Deploy. Note the resulting API URL, e.g. `https://commitmentos-api.onrender.com`. Check
    `https://commitmentos-api.onrender.com/api/health` returns `{"status":"ok","db":"ok",...}`.
@@ -71,17 +71,24 @@ Still inside the same Blueprint, fill in `commitmentos-n8n`'s `sync: false` fiel
   email; the API only ever reports where it went).
 
 Deploy. Check `https://commitmentos-n8n.onrender.com/healthz` returns `200`. The first boot imports credentials
-and eight workflows and activates each one - watch the logs for `[import] done`, then `n8n ready on ::, port 5678`.
+and eight workflows and activates each one - watch the logs for `[import] done`, then `n8n ready on ::, port 5680`
+(n8n listens on an internal port; a small proxy in front of it owns the public one - see Known limitations).
+
+**Claim the n8n owner account straight away.** A fresh n8n serves its "set up owner account" page to whoever opens the
+URL first, and the service is public. Open `https://commitmentos-n8n.onrender.com` yourself and create the owner
+(or check `/rest/settings`: `userManagement.showSetupOnFirstLoad` must be `false`). Until you do, a stranger could
+become the owner and run workflows that use your stored SMTP credential.
 
 ## 4. Vercel: the frontend
 
-1. Create a free account at [vercel.com](https://vercel.com) (GitHub login).
+1. Create a free account at [vercel.com](https://vercel.com) (GitHub login) and let it access the repository.
 2. **Add New > Project**, import the same GitHub repo. Vercel auto-detects Next.js; set:
    - **Root Directory**: `apps/web`
    - **Environment Variable**: `API_URL` = the Render API URL from step 2 (e.g.
-     `https://commitmentos-api.onrender.com`) - this is read once, when the app builds, to configure the `/api/*`
-     proxy (`apps/web/next.config.ts`), so the browser only ever talks to one origin.
-3. Deploy. Note the resulting URL, e.g. `https://commitmentos.vercel.app`.
+     `https://commitmentos-api.onrender.com`) - it configures the `/api/*` proxy (`apps/web/next.config.ts`), so the
+     browser only ever talks to one origin and the session cookie stays first-party.
+3. Deploy. Note the resulting URL, e.g. `https://commitmentos.vercel.app`. The project is linked to the repository, so
+   every push to `main` redeploys the frontend.
 
 ## 5. Close the loop: point the API back at the real frontend URL
 
@@ -92,34 +99,47 @@ Go back to the `commitmentos-api` service on Render and set the real values now 
 
 Manually redeploy `commitmentos-api` for the change to take effect.
 
-## 6. Real SMTP (optional, but "email notifications" only means something with this filled in)
+## 6. Real SMTP
 
-Without this, every "sent" email is caught by n8n's default configuration and never reaches anyone - the API
-reports this honestly (`email_delivery: "local_test_inbox"` from `/api/system/status`, and a banner in the app
-says so) rather than claiming success. For a real Gmail account:
+Without this, email is caught by n8n's default configuration and never reaches anyone - the API reports this honestly
+(`email_delivery: "local_test_inbox"` from `/api/system/status`, and a banner in the app) rather than claiming success.
+Set these on **both** Render services (they must match), and on the API only `NOTIFY_FROM_EMAIL`:
 
-1. Turn on 2-Step Verification on the Google account, then create an **App Password**
-   (Google Account -> Security -> 2-Step Verification -> App passwords).
-2. Set these on **both** Render services (they must match):
-   ```
-   SMTP_HOST=smtp.gmail.com
-   SMTP_PORT=465
-   SMTP_SECURE=true
-   SMTP_USER=you@gmail.com
-   SMTP_PASSWORD=<the app password, no spaces>
-   ```
-   and on the API only: `NOTIFY_FROM_EMAIL=you@gmail.com`.
-3. Redeploy both services. `/api/system/status`'s `email_delivery` field should now read `"smtp"`.
+```
+SMTP_HOST=<provider host>
+SMTP_PORT=<port>
+SMTP_SECURE=<true for implicit TLS on 465, false for STARTTLS>
+SMTP_USER=<smtp username>
+SMTP_PASSWORD=<smtp password or app password - never the account password>
+```
+
+**Render's free tier blocks outbound SMTP on ports 25, 465 and 587**
+([Render docs](https://render.com/docs/free)). Gmail's SMTP servers only offer those ports, so Gmail SMTP works locally
+but **cannot** work from a free Render service. This was hit on the live deployment: an approved follow-up was claimed
+by n8n, the send timed out (`Connection timeout`), and the API recorded the failure and queued a retry - it never
+reported the message as sent. Options that work within the constraint:
+
+- an SMTP provider that also listens on another port, set as `SMTP_PORT` (Brevo documents port 2525 with STARTTLS, so
+  `SMTP_SECURE=false`; this exact setup has not been tested here), or
+- a paid Render instance type, which is not subject to the block, or
+- running n8n somewhere without the restriction.
+
+For Gmail as the sender on a platform that allows SMTP: turn on 2-Step Verification, create an **App Password**
+(Google Account -> Security -> 2-Step Verification -> App passwords), and use `smtp.gmail.com`, port `465`,
+`SMTP_SECURE=true`.
 
 ## 7. Verify the live deployment
 
 ```
 curl https://commitmentos-api.onrender.com/api/health
 curl https://commitmentos-n8n.onrender.com/healthz
+curl -s https://commitmentos-n8n.onrender.com/rest/settings   # userManagement.showSetupOnFirstLoad must be false
 ```
 Then, in a browser: open the Vercel URL, register an account, sign in, add a commitment by hand, and use
 **Import an email** (top bar) to paste a real email - this exercises the real pipeline (n8n -> API -> language
-model -> validation -> Postgres -> the commitment in the UI) without needing Gmail access.
+model -> validation -> Postgres -> the commitment in the UI) without needing Gmail access. `/healthz` only says the
+container is alive: the n8n webhook answers `503 still starting` until the post-wake import finishes, so an import made
+too early is reported as failed and can simply be repeated.
 
 ## Known limitations
 
@@ -156,5 +176,10 @@ model -> validation -> Postgres -> the commitment in the UI) without needing Gma
   it, because it no longer depends on n8n's own responsiveness. This is a real, durable fix, not just a reduction
   in odds; the remaining cost is purely the several-minute wait itself, which a paid tier with a dedicated CPU
   share would shorten but which this fix does not attempt to shorten.
+- **Email from n8n does not work on Render's free tier** (outbound SMTP ports are blocked - see step 6). Detection,
+  reminders inside the app, approvals and the audit trail work; delivering a follow-up or a reminder by email needs one
+  of the options in step 6.
+- **`ALLOW_REGISTRATION` is `true` by default** so the first account can be created; set it to `false` on
+  `commitmentos-api` once your own account exists, otherwise `/register` is a public sign-up page.
 - **Telegram delivery** needs its own bot token (`TELEGRAM_BOT_TOKEN`), not covered above; the code path exists and
   fails safe (never reported as sent) without one.

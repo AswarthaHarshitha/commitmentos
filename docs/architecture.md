@@ -74,7 +74,7 @@ Secrets exist only in `.env` (git-ignored) and, encrypted, inside n8n; they neve
 
 ## Data model
 
-See `database/README.md`. Integrity rules enforced **in the database**: enum CHECK constraints, `completed => completed_at`,
+The schema is defined by the Alembic migrations in `apps/api/alembic/versions`. Integrity rules enforced **in the database**: enum CHECK constraints, `completed => completed_at`,
 `due_at <=> due_precision`, unique `(user, source_type, external_id)` (idempotency ledger), unique `(user, dedupe_key)` on
 notifications (anti-spam), an append-only trigger on `audit_events`.
 
