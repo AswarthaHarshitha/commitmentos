@@ -26,8 +26,9 @@ out/
 coverage/
 *.tsbuildinfo
 next-env.d.ts
-playwright-report/
-test-results/
+.vercel/
+dist/
+build/
 
 # --- OS / editor ---
 .DS_Store
@@ -37,6 +38,9 @@ test-results/
 
 # --- runtime artefacts ---
 *.log
+*.sqlite
+*.sqlite3
+*.db
 tmp/
 .scratch/
 
