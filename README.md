@@ -118,6 +118,11 @@ append-only trigger on the audit log.
 A concrete, zero-cost path (Vercel + Render + Neon), a ready-to-use `render.yaml` Blueprint, and the exact
 click-by-click steps: **[docs/deployment.md](docs/deployment.md)**.
 
+Running deployment: frontend on Vercel at <https://commitmentos.vercel.app>, API on Render at
+<https://commitmentos-api.onrender.com>, n8n on Render, Postgres on Neon. The Render services sleep when idle, so the
+first request after a quiet period is slow, and n8n needs several minutes to become ready after waking (see
+[Known limitations](docs/deployment.md#known-limitations)).
+
 ## Production configuration
 
 At minimum, set for a production deployment (see `.env.example` for the full list): `APP_ENV=production`,
