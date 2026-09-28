@@ -6,7 +6,7 @@ import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import { useAuth, useMe } from "@/lib/queries";
 import { cn } from "@/lib/cn";
 
-export function initials(name: string | undefined, email: string | undefined): string {
+function initials(name: string | undefined, email: string | undefined): string {
   const source = (name || email || "?").trim();
   const parts = source.split(/[\s@._-]+/).filter(Boolean);
   return ((parts[0]?.[0] ?? "?") + (parts.length > 1 ? (parts[1]?.[0] ?? "") : "")).toUpperCase();

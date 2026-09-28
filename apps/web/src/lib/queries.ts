@@ -21,7 +21,7 @@ import {
 } from "./api";
 import { startSettling } from "./settling";
 
-export const keys = {
+const keys = {
   me: ["me"] as const,
   status: ["system-status"] as const,
   dashboard: ["dashboard"] as const,

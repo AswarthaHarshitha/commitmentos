@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { useToast } from "@/components/ui/toast";
 import { errorMessage, type Obligation } from "./api";
@@ -42,11 +41,6 @@ export function useCompleteWithUndo() {
     [complete, reopen, toast],
   );
   return { complete: run, busyId };
-}
-
-export function useOpenObligation() {
-  const router = useRouter();
-  return useCallback((id: string) => router.push(`/obligations/${id}`), [router]);
 }
 
 /** Accept and dismiss for detections in the inbox, with the outcome said the way a person would say it. */

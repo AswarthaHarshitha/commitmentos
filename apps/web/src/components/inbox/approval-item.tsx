@@ -16,7 +16,7 @@ import { formatDuration, formatMoment, formatRange, timeAgo } from "@/lib/time";
 
 const str = (payload: Approval["payload"], key: string) => (typeof payload[key] === "string" ? (payload[key] as string) : "");
 
-export const APPROVAL_STATUS: Record<Approval["status"], { label: string; tone: Tone }> = {
+const APPROVAL_STATUS: Record<Approval["status"], { label: string; tone: Tone }> = {
   PENDING: { label: "Waiting for you", tone: "warn" },
   APPROVED: { label: "Approved, queued", tone: "info" },
   EXECUTING: { label: "In progress", tone: "info" },

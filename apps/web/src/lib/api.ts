@@ -15,10 +15,7 @@ export type AutomationRun = S["AutomationRunOut"];
 export type AutomationRunList = S["AutomationRunList"];
 export type TimelineEntry = S["TimelineEntry"];
 export type User = S["UserOut"];
-export type Source = S["SourceOut"];
 export type CalendarEvent = S["CalendarEventOut"];
-export type SuggestedAction = S["SuggestedAction"];
-export type Understanding = S["Understanding"];
 export type ImportOutcome = S["ImportOutcome"];
 
 export type Status = S["ObligationStatus"];
@@ -26,7 +23,6 @@ export type ObligationType = S["ObligationType"];
 export type Priority = S["Priority"];
 export type RunStatus = S["RunStatus"];
 export type ApprovalAction = S["ApprovalAction"];
-export type ApprovalStatus = S["ApprovalStatus"];
 export type DuePrecision = S["DuePrecision"];
 
 /** Raised for any non-2xx answer. `code` is the API's stable machine-readable error code. */

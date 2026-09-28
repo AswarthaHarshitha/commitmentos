@@ -72,5 +72,3 @@ export const WORKFLOW_BLURB: Record<string, string> = {
   "notification-dispatcher": "Delivers queued reminders by email or Telegram.",
   "api-dispatch": "Hands approved actions to the automation engine.",
 };
-
-export const CONFIDENCE_WORDS = (value: number): string => (value >= 0.85 ? "High confidence" : value >= 0.6 ? "Medium confidence" : "Low confidence");
